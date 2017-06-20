@@ -138,6 +138,32 @@ struct spi_cs_control {
 };
 
 /**
+ * @brief Slave events
+ */
+enum spi_slave_event {
+	/** When slave chip is deselected */
+	SPI_SLAVE_EVENT_DESELECTED	= 0,
+	/** When slave chip is selected */
+	SPI_SLAVE_EVENT_SELECTED,
+	/** When slave need to reply to master input */
+	SPI_SLAVE_EVENT_INPUT,
+	/** When an error occured, stopping the slave */
+	SPI_SLAVE_EVENT_ERROR,
+};
+
+struct spi_config;
+
+/**
+ * @typedef spi_slave_cb
+ * @brief Callback API for SPI slave events
+ *
+ * @param config Pointer to the current slave spi_config structure instance.
+ * @param event
+ */
+typedef int (*spi_slave_cb)(const struct spi_config *config,
+			    enum spi_slave_event event);
+
+/**
  * @brief SPI controller configuration structure
  *
  * @param dev is a valid pointer to an actual SPI device
@@ -162,7 +188,14 @@ struct spi_cs_control {
 struct spi_config {
 	struct device	*dev;
 
+#ifdef CONFIG_SPI_SLAVE
+	union {
+		u32_t		frequency;
+		spi_slave_cb	slave_cb;
+	};
+#else
 	u32_t		frequency;
+#endif /* CONFIG_SPI_SLAVE */
 	u16_t		operation;
 	u16_t		slave;
 
@@ -385,6 +418,78 @@ static inline int _impl_spi_release(const struct spi_config *config)
 
 	return api->release(config);
 }
+
+#ifdef CONFIG_SPI_SLAVE
+/* SPI Slave part: */
+
+/**
+ * @brief Start a controller to act as an SPI slave, if supported
+ *
+ * Note: This function is synchronous.  If successful, given configuration
+ *       will be exclusive to the related controller until spi_slave_stop()
+ *       is called: controller cannot be switched from slave to master and
+ *       back to slave as long as a slave transaction is meant to happen.
+ *       That is valid only for controllers supporting both modes at runtime.
+ *
+ * @param config Pointer to a valid spi_config structure instance.
+ * @param tx_bufs Buffer array where data to be sent originates from,
+ *        or NULL if none.
+ * @param rx_bufs Buffer array where data to be read will be written to,
+ *        or NULL if none.
+ *
+ * @retval 0 If successful, negative errno code otherwise.
+ */
+static inline int spi_slave_transceive(const struct spi_config *config,
+				       const struct spi_buf_set *tx_bufs,
+				       const struct spi_buf_set *rx_bufs)
+{
+	const struct spi_driver_api *api = config->dev->driver_api;
+
+	return api->transceive(config, tx_bufs, rx_bufs);
+}
+
+/**
+ * @brief Update buffers on slave events.
+ *
+ * Note: use this function on SPI_SLAVE_EVENT_INPUT
+ *
+ * @param config Pointer to a valid spi_config structure instance, must be
+ *        the same that was used to read the master input.
+ * @param tx_bufs Buffer array where data to be sent originates from.
+ * @param rx_bufs Buffer array where data to be received from the master
+ *        should be stored in.
+ *
+ * @retval 0 If successful, negative errno code otherwise.
+ */
+static inline int spi_slave_update_buffers(const struct spi_config *config,
+					   const struct spi_buf_set *tx_bufs,
+					   const struct spi_buf_set *rx_bufs)
+{
+	const struct spi_driver_api *api = config->dev->driver_api;
+
+	return api->transceive(config, tx_bufs, rx_bufs);
+}
+
+/**
+ * @brief Stop a controller to run under SPI slave mode
+ *
+ * Note: If this is the only mode supported by the controller, it will just
+ *       put the controller to sleep and it will not resond anymore to any
+ *       data sent to it by a master. If case both modes are supported at
+ *       runtime by the controller, it will be the same but additionnaly
+ *       master based transaction will be available again.
+ *
+ * @param config Pointer to a valid spi_config structure instance.
+ *
+ * @retval 0 If successful, negative errno code otherwise.
+ */
+static inline int spi_slave_stop(const struct spi_config *config)
+{
+	const struct spi_driver_api *api = config->dev->driver_api;
+
+	return api->release(config);
+}
+#endif /* CONFIG_SPI_SLAVE */
 
 #ifdef __cplusplus
 }
