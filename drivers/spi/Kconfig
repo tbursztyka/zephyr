@@ -304,6 +304,8 @@ if !SPI_LEGACY_API
 
 source "drivers/spi/Kconfig.stm32"
 
+source "drivers/spi/Kconfig.nrf5"
+
 endif # !SPI_LEGACY_API
 
 source "drivers/spi/Kconfig.dw"
