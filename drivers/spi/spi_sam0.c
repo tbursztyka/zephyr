@@ -171,7 +171,7 @@ static void spi_sam0_fast_tx(SercomSpi *regs, const struct spi_buf *tx_buf)
 }
 
 /* Fast path that reads into a buf */
-static void spi_sam0_fast_rx(SercomSpi *regs, struct spi_buf *rx_buf)
+static void spi_sam0_fast_rx(SercomSpi *regs, const struct spi_buf *rx_buf)
 {
 	u8_t *p = rx_buf->buf;
 	size_t len = rx_buf->len;
@@ -224,8 +224,9 @@ static void spi_sam0_fast_rx(SercomSpi *regs, struct spi_buf *rx_buf)
 }
 
 /* Fast path that writes and reads bufs of the same length */
-static void spi_sam0_fast_txrx(SercomSpi *regs, const struct spi_buf *tx_buf,
-			       struct spi_buf *rx_buf)
+static void spi_sam0_fast_txrx(SercomSpi *regs,
+			       const struct spi_buf *tx_buf,
+			       const struct spi_buf *rx_buf)
 {
 	const u8_t *psrc = tx_buf->buf;
 	u8_t *p = rx_buf->buf;
@@ -279,27 +280,42 @@ static void spi_sam0_finish(SercomSpi *regs)
 
 /* Fast path where every overlapping tx and rx buffer is the same length */
 static void spi_sam0_fast_transceive(const struct spi_config *config,
-				     const struct spi_buf *tx_bufs,
-				     size_t tx_count, struct spi_buf *rx_bufs,
-				     size_t rx_count)
+				     const struct spi_buf_set *tx_bufs,
+				     const struct spi_buf_set *rx_bufs)
 {
 	const struct spi_sam0_config *cfg = config->dev->config->config_info;
+	size_t tx_count = 0;
+	size_t rx_count = 0;
 	SercomSpi *regs = cfg->regs;
+	const struct spi_buf *tx;
+	const struct spi_buf *rx;
+
+	if (tx_bufs) {
+		tx = tx_bufs->buffers;
+		tx_count = tx_bufs->count;
+	}
+
+	if (rx_bufs) {
+		rx = rx_bufs->buffers;
+		rx_count = rx_bufs->count;
+	} else {
+		rx = NULL;
+	}
 
 	while (tx_count != 0 && rx_count != 0) {
-		spi_sam0_fast_txrx(regs, tx_bufs, rx_bufs);
-		tx_bufs++;
+		spi_sam0_fast_txrx(regs, tx, rx);
+		tx++;
 		tx_count--;
-		rx_bufs++;
+		rx++;
 		rx_count--;
 	}
 
 	for (; tx_count != 0; tx_count--) {
-		spi_sam0_fast_tx(regs, tx_bufs++);
+		spi_sam0_fast_tx(regs, tx++);
 	}
 
 	for (; rx_count != 0; rx_count--) {
-		spi_sam0_fast_rx(regs, rx_bufs++);
+		spi_sam0_fast_rx(regs, rx++);
 	}
 
 	spi_sam0_finish(regs);
@@ -312,18 +328,31 @@ static void spi_sam0_fast_transceive(const struct spi_config *config,
  * - Zero or more trailing RX only bufs
  * - Zero or more trailing TX only bufs
  */
-static bool spi_sam0_is_regular(const struct spi_buf *tx_bufs,
-				size_t tx_count, struct spi_buf *rx_bufs,
-				size_t rx_count)
+static bool spi_sam0_is_regular(const struct spi_buf_set *tx_bufs,
+				const struct spi_buf_set *rx_bufs)
 {
+	const struct spi_buf *tx;
+	const struct spi_buf *rx;
+	size_t tx_count;
+	size_t rx_count;
+
+	if (!tx_bufs || !rx_bufs) {
+		return false;
+	}
+
+	tx = tx_bufs->buffers;
+	tx_count = tx_bufs->count;
+	rx = rx_bufs->buffers;
+	rx_count = rx_bufs->count;
+
 	while (tx_count != 0 && rx_count != 0) {
-		if (tx_bufs->len != rx_bufs->len) {
+		if (tx->len != rx->len) {
 			return false;
 		}
 
-		tx_bufs++;
+		tx++;
 		tx_count--;
-		rx_bufs++;
+		rx++;
 		rx_count--;
 	}
 
@@ -331,8 +360,8 @@ static bool spi_sam0_is_regular(const struct spi_buf *tx_bufs,
 }
 
 static int spi_sam0_transceive(const struct spi_config *config,
-			       const struct spi_buf *tx_bufs, size_t tx_count,
-			       struct spi_buf *rx_bufs, size_t rx_count)
+			       const struct spi_buf_set *tx_bufs,
+			       const struct spi_buf_set *rx_bufs)
 {
 	const struct spi_sam0_config *cfg = config->dev->config->config_info;
 	struct spi_sam0_data *data = config->dev->driver_data;
@@ -355,12 +384,10 @@ static int spi_sam0_transceive(const struct spi_config *config,
 	 * casing is 4x faster than the spi_context() routines
 	 * and also allows the transmit and receive to be interleaved.
 	 */
-	if (spi_sam0_is_regular(tx_bufs, tx_count, rx_bufs, rx_count)) {
-		spi_sam0_fast_transceive(config, tx_bufs, tx_count, rx_bufs,
-					 rx_count);
+	if (spi_sam0_is_regular(tx_bufs, rx_bufs)) {
+		spi_sam0_fast_transceive(config, tx_bufs, rx_bufs);
 	} else {
-		spi_context_buffers_setup(&data->ctx, tx_bufs, tx_count,
-					  rx_bufs, rx_count, 1);
+		spi_context_buffers_setup(&data->ctx, tx_bufs, rx_bufs, 1);
 
 		do {
 			spi_sam0_shift_master(regs, data);
