@@ -156,18 +156,26 @@ static int spi_complete_loop(struct spi_config *spi_conf)
 			.len = BUF_SIZE,
 		},
 	};
-	struct spi_buf rx_bufs[] = {
+	const struct spi_buf rx_bufs[] = {
 		{
 			.buf = buffer_rx,
 			.len = BUF_SIZE,
 		},
 	};
+	const struct spi_buf_set tx = {
+		.buffers = tx_bufs,
+		.count = ARRAY_SIZE(tx_bufs)
+	};
+	const struct spi_buf_set rx = {
+		.buffers = rx_bufs,
+		.count = ARRAY_SIZE(rx_bufs)
+	};
+
 	int ret;
 
 	SYS_LOG_INF("Start");
 
-	ret = spi_transceive(spi_conf, tx_bufs, ARRAY_SIZE(tx_bufs),
-			     rx_bufs, ARRAY_SIZE(rx_bufs));
+	ret = spi_transceive(spi_conf, &tx, &rx);
 	if (ret) {
 		SYS_LOG_ERR("Code %d", ret);
 		return ret;
@@ -196,11 +204,19 @@ static int spi_rx_half_start(struct spi_config *spi_conf)
 			.len = BUF_SIZE,
 		},
 	};
-	struct spi_buf rx_bufs[] = {
+	const struct spi_buf rx_bufs[] = {
 		{
 			.buf = buffer_rx,
 			.len = 8,
 		},
+	};
+	const struct spi_buf_set tx = {
+		.buffers = tx_bufs,
+		.count = ARRAY_SIZE(tx_bufs)
+	};
+	const struct spi_buf_set rx = {
+		.buffers = rx_bufs,
+		.count = ARRAY_SIZE(rx_bufs)
 	};
 	int ret;
 
@@ -208,8 +224,7 @@ static int spi_rx_half_start(struct spi_config *spi_conf)
 
 	memset(buffer_rx, 0, BUF_SIZE);
 
-	ret = spi_transceive(spi_conf, tx_bufs, ARRAY_SIZE(tx_bufs),
-			     rx_bufs, ARRAY_SIZE(rx_bufs));
+	ret = spi_transceive(spi_conf, &tx, &rx);
 	if (ret) {
 		SYS_LOG_ERR("Code %d", ret);
 		return -1;
@@ -238,7 +253,7 @@ static int spi_rx_half_end(struct spi_config *spi_conf)
 			.len = BUF_SIZE,
 		},
 	};
-	struct spi_buf rx_bufs[] = {
+	const struct spi_buf rx_bufs[] = {
 		{
 			.buf = NULL,
 			.len = 8,
@@ -248,14 +263,21 @@ static int spi_rx_half_end(struct spi_config *spi_conf)
 			.len = 8,
 		},
 	};
+	const struct spi_buf_set tx = {
+		.buffers = tx_bufs,
+		.count = ARRAY_SIZE(tx_bufs)
+	};
+	const struct spi_buf_set rx = {
+		.buffers = rx_bufs,
+		.count = ARRAY_SIZE(rx_bufs)
+	};
 	int ret;
 
 	SYS_LOG_INF("Start");
 
 	memset(buffer_rx, 0, BUF_SIZE);
 
-	ret = spi_transceive(spi_conf, tx_bufs, ARRAY_SIZE(tx_bufs),
-			     rx_bufs, ARRAY_SIZE(rx_bufs));
+	ret = spi_transceive(spi_conf, &tx, &rx);
 	if (ret) {
 		SYS_LOG_ERR("Code %d", ret);
 		return -1;
@@ -284,7 +306,7 @@ static int spi_rx_every_4(struct spi_config *spi_conf)
 			.len = BUF_SIZE,
 		},
 	};
-	struct spi_buf rx_bufs[] = {
+	const struct spi_buf rx_bufs[] = {
 		{
 			.buf = NULL,
 			.len = 4,
@@ -302,14 +324,21 @@ static int spi_rx_every_4(struct spi_config *spi_conf)
 			.len = 4,
 		},
 	};
+	const struct spi_buf_set tx = {
+		.buffers = tx_bufs,
+		.count = ARRAY_SIZE(tx_bufs)
+	};
+	const struct spi_buf_set rx = {
+		.buffers = rx_bufs,
+		.count = ARRAY_SIZE(rx_bufs)
+	};
 	int ret;
 
 	SYS_LOG_INF("Start");
 
 	memset(buffer_rx, 0, BUF_SIZE);
 
-	ret = spi_transceive(spi_conf, tx_bufs, ARRAY_SIZE(tx_bufs),
-			     rx_bufs, ARRAY_SIZE(rx_bufs));
+	ret = spi_transceive(spi_conf, &tx, &rx);
 	if (ret) {
 		SYS_LOG_ERR("Code %d", ret);
 		return -1;
@@ -373,18 +402,25 @@ static int spi_async_call(struct spi_config *spi_conf)
 			.len = BUF_SIZE,
 		},
 	};
-	struct spi_buf rx_bufs[] = {
+	const struct spi_buf rx_bufs[] = {
 		{
 			.buf = buffer_rx,
 			.len = BUF_SIZE,
 		},
 	};
+	const struct spi_buf_set tx = {
+		.buffers = tx_bufs,
+		.count = ARRAY_SIZE(tx_bufs)
+	};
+	const struct spi_buf_set rx = {
+		.buffers = rx_bufs,
+		.count = ARRAY_SIZE(rx_bufs)
+	};
 	int ret;
 
 	SYS_LOG_INF("Start");
 
-	ret = spi_transceive_async(spi_conf, tx_bufs, ARRAY_SIZE(tx_bufs),
-				   rx_bufs, ARRAY_SIZE(rx_bufs), &async_sig);
+	ret = spi_transceive_async(spi_conf, &tx, &rx, &async_sig);
 	if (ret == -ENOTSUP) {
 		SYS_LOG_DBG("Not supported");
 		return 0;
