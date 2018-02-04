@@ -106,11 +106,7 @@ static struct spi_config spi_conf = {
 	.operation = (SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB | SPI_WORD_SET(8) |
 		      SPI_LINES_SINGLE),
 	.slave     = 0,
-#if defined(CONFIG_BT_SPI_BLUENRG)
-	.cs        = &cs,
-#else
 	.cs        = NULL,
-#endif /* CONFIG_BT_SPI_BLUENRG */
 };
 static struct spi_buf spi_tx_buf;
 static struct spi_buf spi_rx_buf;
@@ -176,6 +172,10 @@ static void bt_spi_rx_thread(void)
 		k_sem_take(&sem_busy, K_FOREVER);
 
 		do {
+#if defined(CONFIG_BT_SPI_BLUENRG)
+			gpio_pin_write(cs.gpio_dev, cs.gpio_pin, 1);
+			gpio_pin_write(cs.gpio_dev, cs.gpio_pin, 0);
+#endif /* CONFIG_BT_SPI_BLUENRG */
 			bt_spi_transceive(header_master, 5, header_slave, 5);
 		} while (header_slave[STATUS_HEADER_TOREAD] == 0 ||
 			 header_slave[STATUS_HEADER_TOREAD] == 0xFF);
@@ -186,6 +186,9 @@ static void bt_spi_rx_thread(void)
 		} while (rxmsg[0] == 0);
 
 		gpio_pin_enable_callback(irq_dev, GPIO_IRQ_PIN);
+#if defined(CONFIG_BT_SPI_BLUENRG)
+		gpio_pin_write(cs.gpio_dev, cs.gpio_pin, 1);
+#endif /* CONFIG_BT_SPI_BLUENRG */
 
 		k_sem_give(&sem_busy);
 
@@ -268,6 +271,10 @@ static int bt_spi_send(struct net_buf *buf)
 
 	/* Poll sanity values until device has woken-up */
 	do {
+#if defined(CONFIG_BT_SPI_BLUENRG)
+		gpio_pin_write(cs.gpio_dev, cs.gpio_pin, 1);
+		gpio_pin_write(cs.gpio_dev, cs.gpio_pin, 0);
+#endif /* CONFIG_BT_SPI_BLUENRG */
 		bt_spi_transceive(header, 5, rxmsg, 5);
 
 		/*
@@ -282,6 +289,10 @@ static int bt_spi_send(struct net_buf *buf)
 	do {
 		bt_spi_transceive(buf->data, buf->len, rxmsg, buf->len);
 	} while (rxmsg[0] == 0);
+
+#if defined(CONFIG_BT_SPI_BLUENRG)
+	gpio_pin_write(cs.gpio_dev, cs.gpio_pin, 1);
+#endif /* CONFIG_BT_SPI_BLUENRG */
 
 	k_sem_give(&sem_busy);
 
@@ -311,6 +322,13 @@ static int bt_spi_open(void)
 	gpio_pin_configure(rst_dev, GPIO_RESET_PIN,
 			   GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
 	gpio_pin_write(rst_dev, GPIO_RESET_PIN, 0);
+
+#if defined(CONFIG_BT_SPI_BLUENRG)
+	/* Configure the CS (Chip Select) pin */
+	gpio_pin_configure(cs.gpio_dev, cs.gpio_pin,
+			   GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
+	gpio_pin_write(cs.gpio_dev, cs.gpio_pin, 1);
+#endif /* CONFIG_BT_SPI_BLUENRG */
 
 	/* Configure IRQ pin and the IRQ call-back/handler */
 	gpio_pin_configure(irq_dev, GPIO_IRQ_PIN,
