@@ -139,6 +139,24 @@ static inline bool spi_context_is_cs_controlled(struct spi_context *ctx)
 	return (ctx->config->cs && ctx->config->cs->gpio_dev);
 }
 
+static inline int spi_context_cs_active_value(struct spi_context *ctx)
+{
+	if (ctx->config->operation & SPI_CS_ACTIVE_HIGH) {
+		return 1;
+	}
+
+	return 0;
+}
+
+static inline int spi_context_cs_inactive_value(struct spi_context *ctx)
+{
+	if (ctx->config->operation & SPI_CS_ACTIVE_HIGH) {
+		return 0;
+	}
+
+	return 1;
+}
+
 static inline void spi_context_cs_configure(struct spi_context *ctx)
 {
 	if (!spi_context_is_cs_controlled(ctx)) {
@@ -157,9 +175,12 @@ static inline void spi_context_cs_configure(struct spi_context *ctx)
 
 	gpio_pin_configure(ctx->config->cs->gpio_dev,
 			   ctx->config->cs->gpio_pin,
-			   GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
+			   GPIO_DIR_OUT |
+			   (spi_context_cs_inactive_value(ctx) ?
+			    GPIO_PUD_PULL_UP : GPIO_PUD_PULL_DOWN));
 	gpio_pin_write(ctx->config->cs->gpio_dev,
-		       ctx->config->cs->gpio_pin, 1);
+		       ctx->config->cs->gpio_pin,
+		       spi_context_cs_inactive_value(ctx));
 }
 
 static inline void spi_context_cs_control(struct spi_context *ctx, bool on)
@@ -186,7 +207,8 @@ static inline void spi_context_cs_control(struct spi_context *ctx, bool on)
 
 	if (on) {
 		gpio_pin_write(ctx->config->cs->gpio_dev,
-			       ctx->config->cs->gpio_pin, 0);
+			       ctx->config->cs->gpio_pin,
+			       spi_context_cs_active_value(ctx));
 		k_busy_wait(ctx->config->cs->delay);
 	} else {
 		if (ctx->config->operation & SPI_HOLD_ON_CS) {
@@ -195,7 +217,8 @@ static inline void spi_context_cs_control(struct spi_context *ctx, bool on)
 
 		k_busy_wait(ctx->config->cs->delay);
 		gpio_pin_write(ctx->config->cs->gpio_dev,
-			       ctx->config->cs->gpio_pin, 1);
+			       ctx->config->cs->gpio_pin,
+			       spi_context_cs_inactive_value(ctx));
 	}
 }
 
