@@ -1,0 +1,293 @@
+# Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig SPI_NRF5_DRIVERS
+	bool "nRF5 SPI drivers"
+	depends on SPI && SOC_FAMILY_NRF5
+	default n
+	help
+	  Enable support for nRF5 MCU series SPI drivers. Peripherals with the
+	  same instance id can not be used together, e.g., SPIM_0 and I2C_0
+	  (TWIM0) and SPIS_0. You may need to disable I2C_0 or I2C_1.
+
+if SPI_NRF5_DRIVERS
+
+# nordic twiX0, spiX0, spi0 instances can not be used at the same time
+if SPI_0 && !I2C_0
+
+choice
+	prompt "SPI Port 0 Driver type"
+
+config SPI_0_NRF5
+	bool "nRF5 SPI 0"
+	depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF51X
+	help
+	  nRF5 SPI Master without EasyDMA on port 0
+
+config SPIM_0_NRF5
+	bool "nRF5 SPIM 0"
+	depends on SOC_SERIES_NRF52X
+	help
+	  nRF5 SPI Master with EasyDMA on port 0
+
+config SPIS_0_NRF5
+	bool "nRF5 SPIS 0"
+	depends on SOC_SERIES_NRF52X
+	help
+	  nRF5 SPI Slave with EasyDMA on port 0
+
+endchoice
+
+config SPI_0_NRF5_GPIO_SCK_PIN
+	int "SCK pin number"
+	range 0 31
+	help
+	  GPIO pin number for SCK
+
+config SPI_0_NRF5_GPIO_MOSI_PIN
+	int "MOSI pin number"
+	range 0 31
+	help
+	  GPIO pin number to use for MOSI
+
+config SPI_0_NRF5_GPIO_MISO_PIN
+	int "MISO pin number"
+	range 0 31
+	help
+	  GPIO pin number for MISO
+
+config SPI_0_NRF5_GPIO_SS_PIN_0
+	int "CS 0 pin number"
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_0_NRF5_GPIO_SS_PIN_1
+	int "CS 1 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_0_NRF5_GPIO_SS_PIN_2
+	int "CS 2 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_0_NRF5_GPIO_SS_PIN_3
+	int "CS 3 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_0_NRF5_ORC
+	hex "SPI 0 master ORC"
+	depends on SPI_0_NRF5 || SPIM_0_NRF5
+	default 0xFF
+	help
+	  Overrun character - this character is used when all bytes from the
+	  TX buffer are sent, but the transfer continues due to RX.
+
+endif # SPI_0 && !I2C_0
+
+if SPI_1 && !I2C_1
+
+choice
+	prompt "SPI Port 1 Driver type"
+
+config SPI_1_NRF5
+	bool "nRF5 SPI 1"
+	depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF51X
+	help
+	  nRF5 SPI Master without EasyDMA on port 1
+
+config SPIM_1_NRF5
+	bool "nRF5 SPIM 1"
+	depends on SOC_SERIES_NRF52X
+	help
+	  nRF5 SPI Master with EasyDMA on port 1
+
+config SPIS_1_NRF5
+	bool "nRF5 SPIS 1"
+	depends on SOC_SERIES_NRF52X
+	help
+	  nRF5 SPI Slave with EasyDMA on port 1
+
+endchoice
+
+config SPI_1_NRF5_GPIO_SCK_PIN
+	int "SCK pin number"
+	range 0 31
+	help
+	  GPIO pin number for SCK
+
+config SPI_1_NRF5_GPIO_MOSI_PIN
+	int "MOSI pin number"
+	range 0 31
+	help
+	  GPIO pin number to use for MOSI
+
+config SPI_1_NRF5_GPIO_MISO_PIN
+	int "MISO pin number"
+	range 0 31
+	help
+	  GPIO pin number for MISO
+
+config SPI_1_NRF5_GPIO_SS_PIN_0
+	int "CS 0 pin number"
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_1_NRF5_GPIO_SS_PIN_1
+	int "CS 1 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_1_NRF5_GPIO_SS_PIN_2
+	int "CS 2 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_1_NRF5_GPIO_SS_PIN_3
+	int "CS 3 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_1_NRF5_ORC
+	hex "SPI 1 master ORC"
+	depends on SPI_1_NRF5 || SPIM_1_NRF5
+	default 0xFF
+	help
+	  Overrun character - this character is used when all bytes from the
+	  TX buffer are sent, but the transfer continues due to RX.
+
+endif # SPI_1 && !I2C_1
+
+if SPI_2 && !I2C_2 && SOC_SERIES_NRF52X
+
+choice
+	prompt "SPI Port 2 Driver type"
+
+config SPI_2_NRF5
+	bool "nRF5 SPI 2"
+	depends on SOC_SERIES_NRF52X
+	help
+	  nRF5 SPI Master without EasyDMA on port 2
+
+config SPIM_2_NRF5
+	bool "nRF5 SPIM 2"
+	depends on SOC_SERIES_NRF52X
+	help
+	  nRF5 SPI Master with EasyDMA on port 2
+
+config SPIS_2_NRF5
+	bool "nRF5 SPIS 2"
+	depends on SOC_SERIES_NRF52X
+	help
+	  nRF5 SPI Slave with EasyDMA on port 2
+
+endchoice
+
+config SPI_2_NRF5_GPIO_SCK_PIN
+	int "SCK pin number"
+	range 0 31
+	help
+	  GPIO pin number for SCK
+
+config SPI_2_NRF5_GPIO_MOSI_PIN
+	int "MOSI pin number"
+	range 0 31
+	help
+	  GPIO pin number to use for MOSI
+
+config SPI_2_NRF5_GPIO_MISO_PIN
+	int "MISO pin number"
+	range 0 31
+	help
+	  GPIO pin number for MISO
+
+config SPI_2_NRF5_GPIO_SS_PIN_0
+	int "CS 0 pin number"
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_2_NRF5_GPIO_SS_PIN_1
+	int "CS 1 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_2_NRF5_GPIO_SS_PIN_2
+	int "CS 2 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_2_NRF5_GPIO_SS_PIN_3
+	int "CS 3 pin number"
+	depends on !SPIS_0_NRF5
+	range 0 255
+	default 255
+	help
+	  Slave Select (Chip Select) gpio pin number for line n. Not used value
+	  is 255 (0xff).
+
+config SPI_2_NRF5_ORC
+	hex "SPI 2 master ORC"
+	depends on SPI_2_NRF5 || SPIM_2_NRF5
+	default 0xFF
+	help
+	  Overrun character - this character is used when all bytes from the
+	  TX buffer are sent, but the transfer continues due to RX.
+
+endif # SPI_2 && !I2C_2 && SOC_SERIES_NRF52X
+
+# Hidden compile options
+config SPI_NRF5
+	bool
+	depends on SPI_NRF5_DRIVERS
+	select NRFX_SPI
+	default y if (SPI_0_NRF5 || SPI_1_NRF5 || SPI_2_NRF5)
+
+config SPI_NRF5_SS_UNUSED_PIN
+	int
+	default 255
+
+endif # SPI_NRF5

@@ -88,10 +88,32 @@ struct spi_cs_control spi_cs = {
 	.delay = 0,
 };
 
-#else
+#elif defined (CONFIG_BOARD_NRF51_PCA10028) || \
+      defined (CONFIG_BOARD_NRF52_PCA10040) || \
+      defined (CONFIG_BOARD_NRF52840_PCA10056)
+
+#if defined (CONFIG_BOARD_NRF51_PCA10028)
+#define SPI_DRV_NAME CONFIG_SPI_1_NAME
+#elif defined (CONFIG_BOARD_NRF52_PCA10040)
+#define SPI_DRV_NAME CONFIG_SPI_0_NAME
+#elif defined (CONFIG_BOARD_NRF52840_PCA10056)
+#define SPI_DRV_NAME CONFIG_SPI_2_NAME
+#endif
+
+#define SPI_SLAVE 0
+#define MIN_FREQ 125000
+#define MAX_FREQ 8000000
+
 #undef SPI_CS
 #define SPI_CS NULL
 #define CS_CTRL_GPIO_DRV_NAME ""
+
+#else
+
+#undef SPI_CS
+#define SPI_CS NULL
+#define CS_CTRL_GPIO_DRV_NAME ""
+
 #endif
 
 #define BUF_SIZE 17
@@ -127,7 +149,11 @@ struct spi_config spi_slow = {
 };
 
 struct spi_config spi_fast = {
+#if defined(MAX_FREQ)
+	.frequency = MAX_FREQ,
+#else
 	.frequency = 16000000,
+#endif
 	.operation = SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
 	SPI_MODE_CPHA | SPI_WORD_SET(8) | SPI_LINES_SINGLE,
 	.slave = SPI_SLAVE,
@@ -148,7 +174,7 @@ static int cs_ctrl_gpio_config(struct spi_cs_control *cs)
 	return 0;
 }
 
-static int spi_complete_loop(struct spi_config *spi_conf)
+static int spi_complete_loop(const struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -196,7 +222,7 @@ static int spi_complete_loop(struct spi_config *spi_conf)
 	return 0;
 }
 
-static int spi_rx_half_start(struct spi_config *spi_conf)
+static int spi_rx_half_start(const struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -245,7 +271,7 @@ static int spi_rx_half_start(struct spi_config *spi_conf)
 	return 0;
 }
 
-static int spi_rx_half_end(struct spi_config *spi_conf)
+static int spi_rx_half_end(const struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -298,7 +324,7 @@ static int spi_rx_half_end(struct spi_config *spi_conf)
 	return 0;
 }
 
-static int spi_rx_every_4(struct spi_config *spi_conf)
+static int spi_rx_every_4(const struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -394,7 +420,7 @@ static void spi_async_call_cb(struct k_poll_event *async_evt,
 	}
 }
 
-static int spi_async_call(struct spi_config *spi_conf)
+static int spi_async_call(const struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -444,7 +470,7 @@ static int spi_async_call(struct spi_config *spi_conf)
 }
 
 static int spi_resource_lock_test(struct spi_config *spi_conf_lock,
-				   struct spi_config *spi_conf_try)
+				  const struct spi_config *spi_conf_try)
 {
 	spi_conf_lock->operation |= SPI_LOCK_ON;
 
@@ -471,8 +497,7 @@ void main(void)
 
 	SYS_LOG_INF("SPI test on buffers TX/RX %p/%p", buffer_tx, buffer_rx);
 
-	if (cs_ctrl_gpio_config(spi_slow.cs) ||
-	    cs_ctrl_gpio_config(spi_fast.cs)) {
+	if (cs_ctrl_gpio_config(SPI_CS)) {
 		return;
 	}
 
