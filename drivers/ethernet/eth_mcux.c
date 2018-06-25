@@ -436,9 +436,11 @@ static bool eth_get_ptp_data(struct net_if *iface, struct net_pkt *pkt,
 }
 #endif /* CONFIG_PTP_CLOCK_MCUX */
 
-static int eth_tx(struct net_if *iface, struct net_pkt *pkt)
+static int eth_tx(struct device *dev,
+		  struct net_if *iface,
+		  struct net_pkt *pkt)
 {
-	struct eth_context *context = net_if_get_device(iface)->driver_data;
+	struct eth_context *context = dev->driver_data;
 	const struct net_buf *frag;
 	u8_t *dst;
 	status_t status;
@@ -911,14 +913,13 @@ static struct device *eth_mcux_get_ptp_clock(struct device *dev)
 #endif
 
 static const struct ethernet_api api_funcs = {
-	.iface_api.init = eth_iface_init,
-	.iface_api.send = eth_tx,
-
-	.get_capabilities = eth_mcux_get_capabilities,
-
+	.iface_api.init		= eth_iface_init,
+	.iface_api.send		= net_eth_send,
 #if defined(CONFIG_PTP_CLOCK_MCUX)
-	.get_ptp_clock = eth_mcux_get_ptp_clock,
+	.get_ptp_clock		= eth_mcux_get_ptp_clock,
 #endif
+	.get_capabilities	= eth_mcux_get_capabilities,
+	.send			= eth_tx,
 };
 
 #if defined(CONFIG_PTP_CLOCK_MCUX)
