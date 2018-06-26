@@ -512,8 +512,6 @@ static int eth_tx(struct device *dev,
 		return -1;
 	}
 
-	net_pkt_unref(pkt);
-
 	return 0;
 }
 
