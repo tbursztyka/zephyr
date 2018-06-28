@@ -360,7 +360,6 @@ static bool send_ipv6_udp_msg(struct net_if *iface,
 	net_pkt_frag_add(pkt, frag);
 
 	net_pkt_set_iface(pkt, iface);
-	net_pkt_set_ll_reserve(pkt, net_buf_headroom(frag));
 
 	setup_ipv6_udp(pkt, src, dst, src_port, dst_port);
 
@@ -410,7 +409,6 @@ static bool send_ipv6_udp_long_msg(struct net_if *iface,
 	net_pkt_frag_add(pkt, frag);
 
 	net_pkt_set_iface(pkt, iface);
-	net_pkt_set_ll_reserve(pkt, net_buf_headroom(frag));
 
 	setup_ipv6_udp_long(pkt, src, dst, src_port, dst_port);
 
@@ -460,7 +458,6 @@ static bool send_ipv4_udp_msg(struct net_if *iface,
 	net_pkt_frag_add(pkt, frag);
 
 	net_pkt_set_iface(pkt, iface);
-	net_pkt_set_ll_reserve(pkt, net_buf_headroom(frag));
 
 	setup_ipv4_udp(pkt, src, dst, src_port, dst_port);
 

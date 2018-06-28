@@ -158,10 +158,6 @@ static int eth_tx_offloading_disabled(struct net_if *iface, struct net_pkt *pkt)
 		memcpy(((struct net_eth_hdr *)net_pkt_ll(pkt))->dst.addr,
 		       lladdr, sizeof(lladdr));
 
-		pkt->frags->data -= net_pkt_ll_reserve(pkt);
-		pkt->frags->len += net_pkt_ll_reserve(pkt);
-		net_pkt_set_ll_reserve(pkt, 0);
-
 		if (net_recv_data(net_pkt_iface(pkt), pkt) < 0) {
 			test_failed = true;
 			zassert_true(false, "Packet %p receive failed\n", pkt);

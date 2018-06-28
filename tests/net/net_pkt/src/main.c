@@ -27,7 +27,6 @@
 #define NET_LOG_ENABLED 1
 #include "net_private.h"
 
-#define LL_RESERVE 28
 #define FRAG_COUNT 7
 
 struct ipv6_hdr {
@@ -72,7 +71,7 @@ static void test_ipv6_multi_frags(void)
 
 	/* Example of multi fragment scenario with IPv6 */
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	frag = net_pkt_get_reserve_rx_data(LL_RESERVE, K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 
 	/* Place the IP + UDP header in the first fragment */
 	if (!net_buf_tailroom(frag)) {
@@ -100,13 +99,13 @@ static void test_ipv6_multi_frags(void)
 	net_pkt_frag_add(pkt, frag);
 
 	/* Put some data to rest of the fragments */
-	frag = net_pkt_get_reserve_rx_data(LL_RESERVE, K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	if (net_buf_tailroom(frag) -
-	      (CONFIG_NET_BUF_DATA_SIZE - LL_RESERVE)) {
+	      (CONFIG_NET_BUF_DATA_SIZE - 0)) {
 		printk("Invalid number of bytes available in the buf, "
 		       "should be 0 but was %zd - %d\n",
 		       net_buf_tailroom(frag),
-		       CONFIG_NET_BUF_DATA_SIZE - LL_RESERVE);
+		       CONFIG_NET_BUF_DATA_SIZE - 0);
 		zassert_true(false, "Invalid byte count");
 	}
 
@@ -138,7 +137,7 @@ static void test_ipv6_multi_frags(void)
 
 		net_pkt_frag_add(pkt, frag);
 		if (remaining > 0) {
-			frag = net_pkt_get_reserve_rx_data(LL_RESERVE,
+			frag = net_pkt_get_reserve_rx_data(0,
 							   K_FOREVER);
 		}
 	}
@@ -193,7 +192,7 @@ static void test_fragment_copy(void)
 	int pos;
 
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	frag = net_pkt_get_reserve_rx_data(LL_RESERVE, K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 
 	/* Place the IP + UDP header in the first fragment */
 	if (net_buf_tailroom(frag)) {
@@ -327,7 +326,7 @@ static void test_pkt_read_append(void)
 
 	/* Example of multi fragment read, append and skip APS's */
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	frag = net_pkt_get_reserve_rx_data(LL_RESERVE, K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 
 	/* Place the IP + UDP header in the first fragment */
 	if (!net_buf_tailroom(frag)) {
@@ -355,13 +354,13 @@ static void test_pkt_read_append(void)
 	net_pkt_frag_add(pkt, frag);
 
 	/* Put some data to rest of the fragments */
-	frag = net_pkt_get_reserve_rx_data(LL_RESERVE, K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	if (net_buf_tailroom(frag) -
-	      (CONFIG_NET_BUF_DATA_SIZE - LL_RESERVE)) {
+	      (CONFIG_NET_BUF_DATA_SIZE - 0)) {
 		printk("Invalid number of bytes available in the buf, "
 		       "should be 0 but was %zd - %d\n",
 		       net_buf_tailroom(frag),
-		       CONFIG_NET_BUF_DATA_SIZE - LL_RESERVE);
+		       CONFIG_NET_BUF_DATA_SIZE - 0);
 		zassert_true(false, "Invalid number of bytes avail");
 	}
 
@@ -393,7 +392,7 @@ static void test_pkt_read_append(void)
 
 		net_pkt_frag_add(pkt, frag);
 		if (remaining > 0) {
-			frag = net_pkt_get_reserve_rx_data(LL_RESERVE,
+			frag = net_pkt_get_reserve_rx_data(0,
 							   K_FOREVER);
 		}
 	}
@@ -534,10 +533,8 @@ static void test_pkt_read_write_insert(void)
 
 	/* Example of multi fragment read, append and skip APS's */
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	net_pkt_set_ll_reserve(pkt, LL_RESERVE);
 
-	frag = net_pkt_get_reserve_rx_data(net_pkt_ll_reserve(pkt),
-					   K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	net_pkt_frag_add(pkt, frag);
 
 	/* 1) Offset is with in input fragment.
@@ -576,7 +573,6 @@ static void test_pkt_read_write_insert(void)
 	net_pkt_unref(pkt);
 
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	net_pkt_set_ll_reserve(pkt, LL_RESERVE);
 
 	/* 3) Offset is in next to next fragment.
 	 * Write app data after 2 fragments. (If the offset far away, api will
@@ -618,10 +614,8 @@ static void test_pkt_read_write_insert(void)
 	 *    and write there.
 	 */
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	net_pkt_set_ll_reserve(pkt, LL_RESERVE);
 
-	frag = net_pkt_get_reserve_rx_data(net_pkt_ll_reserve(pkt),
-					   K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	net_pkt_frag_add(pkt, frag);
 
 	/* Create 10 bytes space. */
@@ -649,19 +643,16 @@ static void test_pkt_read_write_insert(void)
 	 *    for 5 bytes created.
 	 */
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	net_pkt_set_ll_reserve(pkt, LL_RESERVE);
 
 	/* First fragment make it fully occupied. */
-	frag = net_pkt_get_reserve_rx_data(net_pkt_ll_reserve(pkt),
-					   K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	net_pkt_frag_add(pkt, frag);
 
 	len = net_buf_tailroom(frag);
 	net_buf_add(frag, len);
 
 	/* 2nd fragment last 10 bytes tailroom, rest occupied */
-	frag = net_pkt_get_reserve_rx_data(net_pkt_ll_reserve(pkt),
-					   K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	net_pkt_frag_add(pkt, frag);
 
 	len = net_buf_tailroom(frag);
@@ -671,8 +662,7 @@ static void test_pkt_read_write_insert(void)
 	read_pos = frag->len - 10;
 
 	/* 3rd fragment, only 5 bytes occupied */
-	frag = net_pkt_get_reserve_rx_data(net_pkt_ll_reserve(pkt),
-					   K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	net_pkt_frag_add(pkt, frag);
 	net_buf_add(frag, 5);
 
@@ -698,11 +688,9 @@ static void test_pkt_read_write_insert(void)
 	 */
 
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	net_pkt_set_ll_reserve(pkt, LL_RESERVE);
 
 	/* First fragment make it fully occupied. */
-	frag = net_pkt_get_reserve_rx_data(net_pkt_ll_reserve(pkt),
-					   K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	net_pkt_frag_add(pkt, frag);
 
 	frag = net_pkt_write(pkt, frag, NET_IPV6UDPH_LEN, &pos, 10,
@@ -744,11 +732,9 @@ static void test_pkt_read_write_insert(void)
 	 * take two fragments.
 	 */
 	pkt = net_pkt_get_reserve_rx(0, K_FOREVER);
-	net_pkt_set_ll_reserve(pkt, LL_RESERVE);
 
 	/* First fragment make it fully occupied. */
-	frag = net_pkt_get_reserve_rx_data(net_pkt_ll_reserve(pkt),
-					   K_FOREVER);
+	frag = net_pkt_get_reserve_rx_data(0, K_FOREVER);
 	net_pkt_frag_add(pkt, frag);
 
 	frag = net_pkt_write(pkt, frag, NET_IPV6UDPH_LEN, &pos, 10,

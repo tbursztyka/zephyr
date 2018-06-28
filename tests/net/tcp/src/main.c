@@ -401,8 +401,6 @@ static bool send_ipv6_tcp_msg(struct net_if *iface,
 
 	pkt = net_pkt_get_reserve_tx(0, K_FOREVER);
 
-	net_pkt_set_ll_reserve(pkt, 0);
-
 	frag = net_pkt_get_frag(pkt, K_FOREVER);
 
 	net_pkt_frag_add(pkt, frag);
@@ -452,8 +450,6 @@ static bool send_ipv4_tcp_msg(struct net_if *iface,
 
 	pkt = net_pkt_get_reserve_tx(0, K_FOREVER);
 
-	net_pkt_set_ll_reserve(pkt, 0);
-
 	frag = net_pkt_get_frag(pkt, K_FOREVER);
 
 	net_pkt_frag_add(pkt, frag);
@@ -502,8 +498,6 @@ static bool send_ipv6_tcp_long_msg(struct net_if *iface,
 	int ret;
 
 	pkt = net_pkt_get_reserve_tx(0, K_FOREVER);
-
-	net_pkt_set_ll_reserve(pkt, 0);
 
 	frag = net_pkt_get_frag(pkt, K_FOREVER);
 
