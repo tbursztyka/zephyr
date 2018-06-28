@@ -306,7 +306,7 @@ static enum net_verdict handle_echo_request(struct net_pkt *orig)
 
 	iface = net_pkt_iface(orig);
 
-	pkt = net_pkt_get_reserve_tx(0, PKT_WAIT_TIME);
+	pkt = net_pkt_get_reserve_tx(PKT_WAIT_TIME);
 	if (!pkt) {
 		goto drop_no_pkt;
 	}
@@ -424,7 +424,7 @@ int net_icmpv6_send_error(struct net_pkt *orig, u8_t type, u8_t code,
 		}
 	}
 
-	pkt = net_pkt_get_reserve_tx(0, PKT_WAIT_TIME);
+	pkt = net_pkt_get_reserve_tx(PKT_WAIT_TIME);
 	if (!pkt) {
 		err = -ENOMEM;
 		goto drop_no_pkt;
@@ -544,7 +544,7 @@ int net_icmpv6_send_echo_request(struct net_if *iface,
 
 	src = net_if_ipv6_select_src_addr(iface, dst);
 
-	pkt = net_pkt_get_reserve_tx(0, PKT_WAIT_TIME);
+	pkt = net_pkt_get_reserve_tx(PKT_WAIT_TIME);
 	if (!pkt) {
 		return -ENOMEM;
 	}

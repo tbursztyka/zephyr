@@ -539,7 +539,7 @@ static void eth_rx(struct device *iface)
 		return;
 	}
 
-	pkt = net_pkt_get_reserve_rx(0, K_NO_WAIT);
+	pkt = net_pkt_get_reserve_rx(K_NO_WAIT);
 	if (!pkt) {
 		/* We failed to get a receive buffer.  We don't add
 		 * any further logging here because the allocator

@@ -182,14 +182,11 @@ static inline char *net_sprint_ll_addr(const u8_t *ll, u8_t ll_len)
 	return net_sprint_ll_addr_buf(ll, ll_len, (char *)buf, sizeof(buf));
 }
 
-static inline void _hexdump(const u8_t *packet, size_t length, u8_t reserve)
+static inline void _hexdump(const u8_t *packet, size_t length)
 {
 	char output[sizeof("xxxxyyyy xxxxyyyy")];
 	int n = 0, k = 0;
 	u8_t byte;
-#if defined(CONFIG_SYS_LOG) && (SYS_LOG_LEVEL > SYS_LOG_LEVEL_OFF)
-	u8_t r = reserve;
-#endif
 
 	while (length--) {
 		if (n % 16 == 0) {
@@ -197,17 +194,6 @@ static inline void _hexdump(const u8_t *packet, size_t length, u8_t reserve)
 		}
 
 		byte = *packet++;
-
-#if defined(CONFIG_SYS_LOG) && (SYS_LOG_LEVEL > SYS_LOG_LEVEL_OFF)
-		if (reserve) {
-			if (r) {
-				printk(SYS_LOG_COLOR_YELLOW);
-				r--;
-			} else {
-				printk(SYS_LOG_COLOR_OFF);
-			}
-		}
-#endif
 
 		printk("%02X ", byte);
 
@@ -256,7 +242,7 @@ static inline void net_hexdump(const char *str,
 
 	printk("%s\n", str);
 
-	_hexdump(packet, length, 0);
+	_hexdump(packet, length);
 }
 
 
@@ -266,19 +252,13 @@ static inline void net_hexdump(const char *str,
 static inline void net_hexdump_frags(const char *str,
 				     struct net_pkt *pkt, bool full)
 {
-	u8_t reserve = full ? net_pkt_ll_reserve(pkt) : 0;
 	struct net_buf *frag = pkt->frags;
 
 	printk("%s\n", str);
 
 	while (frag) {
-		_hexdump(full ? frag->data - reserve : frag->data,
-			 frag->len + reserve, reserve);
+		_hexdump(frag->data, frag->len);
 		frag = frag->frags;
-
-		if (full && reserve) {
-			reserve -= net_pkt_ll_reserve(pkt);
-		}
 	}
 }
 
