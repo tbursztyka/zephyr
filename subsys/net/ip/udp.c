@@ -18,132 +18,89 @@
 
 #define PKT_WAIT_TIME K_SECONDS(1)
 
-struct net_pkt *net_udp_insert(struct net_pkt *pkt,
-			       u16_t offset,
-			       u16_t src_port,
-			       u16_t dst_port)
+int net_udp_create(struct net_pkt *pkt, u16_t src_port, u16_t dst_port)
 {
-	struct net_buf *frag, *prev, *udp;
-	u16_t pos;
+	size_t length = net_pkt_get_len(pkt) -
+		net_pkt_ip_hdr_len(pkt) -
+		net_pkt_ipv6_ext_len(pkt) +
+		NET_UDPH_LEN;
 
-	frag = net_frag_get_pos(pkt, offset, &pos);
-	if (!frag && pos == 0xffff) {
-		NET_DBG("Offset %d out of pkt len %zd",
-			offset, net_pkt_get_len(pkt));
-		return NULL;
+	NET_DBG("UDP Header - total len: %zu ", length);
+
+	if (net_pkt_write_be16(pkt, src_port) ||
+	    net_pkt_write_be16(pkt, dst_port) ||
+	    net_pkt_write_be16(pkt, length) ||
+	    net_pkt_write_be16(pkt, 0)) {
+		return -ENOBUFS;
 	}
 
-	/* We can only insert the UDP header between existing two
-	 * fragments.
-	 */
-	if (frag && pos != 0) {
-		NET_DBG("Cannot insert UDP data into offset %d", offset);
-		return NULL;
-	}
-
-	if (pkt->frags != frag) {
-		struct net_buf *tmp = pkt->frags;
-
-		prev = NULL;
-
-		while (tmp->frags) {
-			if (tmp->frags == frag) {
-				prev = tmp;
-				break;
-			}
-
-			tmp = tmp->frags;
-		}
-	} else {
-		prev = pkt->frags;
-	}
-
-	if (!prev) {
-		goto fail;
-	}
-
-	udp = net_pkt_get_frag(pkt, PKT_WAIT_TIME);
-	if (!udp) {
-		goto fail;
-	}
-
-	/* Source and destination ports are already in network byte order */
-	net_buf_add_mem(udp, &src_port, sizeof(src_port));
-	net_buf_add_mem(udp, &dst_port, sizeof(dst_port));
-
-	net_buf_add_be16(udp, net_pkt_get_len(pkt) -
-			 net_pkt_ip_hdr_len(pkt) -
-			 net_pkt_ipv6_ext_len(pkt) +
-			 sizeof(struct net_udp_hdr));
-
-	net_buf_add_be16(udp, 0); /* chksum */
-
-	net_buf_frag_insert(prev, udp);
-
-	frag = net_frag_get_pos(pkt, net_pkt_ip_hdr_len(pkt) +
-				net_pkt_ipv6_ext_len(pkt) +
-				sizeof(struct net_udp_hdr),
-				&pos);
-	if (frag) {
-		net_pkt_set_appdata(pkt, frag->data + pos);
-	}
-
-	return pkt;
-
-fail:
-	NET_DBG("Cannot insert UDP header into %p", pkt);
-	return NULL;
+	return 0;
 }
 
-struct net_buf *net_udp_set_chksum(struct net_pkt *pkt, struct net_buf *frag)
+int net_udp_set_chksum(struct net_pkt *pkt)
 {
 	struct net_udp_hdr *hdr;
 	u16_t chksum = 0;
-	u16_t pos;
 
-	hdr = net_pkt_udp_data(pkt);
-	if (net_udp_header_fits(pkt, hdr)) {
-		hdr->chksum = 0;
-		hdr->chksum = ~net_calc_chksum_udp(pkt);
+	net_pkt_set_overwrite(pkt, true);
 
-		return frag;
+	net_pkt_iter_init_to_headers(pkt);
+
+	if (net_pkt_skip(pkt, net_pkt_ip_hdr_len(pkt) +
+			 net_pkt_ipv6_ext_len(pkt))) {
+		NET_ERR("Could not skip to checksum area");
+		return -ENOBUFS;
 	}
 
-	/* We need to set the checksum to 0 first before the calc */
-	frag = net_pkt_write(pkt, frag,
-			     net_pkt_ip_hdr_len(pkt) +
-			     net_pkt_ipv6_ext_len(pkt) +
-			     2 + 2 + 2 /* src + dst + len */,
-			     &pos, sizeof(chksum), (u8_t *)&chksum,
-			     PKT_WAIT_TIME);
+	hdr = net_pkt_iter_get_pos(pkt);
+	if (net_udp_header_fits(pkt, hdr)) {
+		hdr->chksum = 0;
+		hdr->chksum = net_calc_chksum_udp(pkt);
 
-	chksum = ~net_calc_chksum_udp(pkt);
+		NET_DBG("Wrote checksum 0x%04x", ntohs(hdr->chksum));
 
-	frag = net_pkt_write(pkt, frag, pos - 2, &pos, sizeof(chksum),
-			     (u8_t *)&chksum, PKT_WAIT_TIME);
+		return 0;
+	}
 
-	NET_ASSERT(frag);
+	if (net_pkt_skip(pkt, 2 + 2 + 2 /* src + dst + len */) ||
+	    net_pkt_memset(pkt, 0, sizeof(chksum))) {
+		NET_ERR("Could not memset checksum area");
+		return -ENOBUFS;
+	}
 
-	return frag;
+	chksum = net_calc_chksum_udp(pkt);
+
+	net_pkt_iter_init(pkt);
+	net_pkt_skip(pkt, net_pkt_ip_hdr_len(pkt) +
+		     net_pkt_ipv6_ext_len(pkt) +
+		     2 + 2 + 2 /* src + dst + len */);
+
+	NET_DBG("Wrote checksum 0x%04x", ntohs(chksum));
+
+	return net_pkt_write(pkt, &chksum, sizeof(chksum));
 }
 
-u16_t net_udp_get_chksum(struct net_pkt *pkt, struct net_buf *frag)
+u16_t net_udp_get_chksum(struct net_pkt *pkt)
 {
 	struct net_udp_hdr *hdr;
 	u16_t chksum;
-	u16_t pos;
 
-	hdr = net_pkt_udp_data(pkt);
+	net_pkt_iter_init(pkt);
+
+	if (net_pkt_skip(pkt, net_pkt_ip_hdr_len(pkt) +
+			 net_pkt_ipv6_ext_len(pkt))) {
+		return 0;
+	}
+
+	hdr = net_pkt_iter_get_pos(pkt);
 	if (net_udp_header_fits(pkt, hdr)) {
 		return hdr->chksum;
 	}
 
-	frag = net_frag_read(frag,
-			     net_pkt_ip_hdr_len(pkt) +
-			     net_pkt_ipv6_ext_len(pkt) +
-			     2 + 2 + 2 /* src + dst + len */,
-			     &pos, sizeof(chksum), (u8_t *)&chksum);
-	NET_ASSERT(frag);
+	if (net_pkt_skip(pkt, 2 + 2 + 2 /* src + dst + len */) ||
+	    net_pkt_read(pkt, &chksum, sizeof(chksum))) {
+		return 0;
+	}
 
 	return chksum;
 }
@@ -152,26 +109,23 @@ struct net_udp_hdr *net_udp_get_hdr(struct net_pkt *pkt,
 				    struct net_udp_hdr *hdr)
 {
 	struct net_udp_hdr *udp_hdr;
-	struct net_buf *frag;
-	u16_t pos;
 
-	udp_hdr = net_pkt_udp_data(pkt);
+	net_pkt_iter_init(pkt);
+
+	if (net_pkt_skip(pkt, net_pkt_ip_hdr_len(pkt) +
+			 net_pkt_ipv6_ext_len(pkt))) {
+		return NULL;
+	}
+
+	udp_hdr = net_pkt_iter_get_pos(pkt);
 	if (net_udp_header_fits(pkt, udp_hdr)) {
 		return udp_hdr;
 	}
 
-	frag = net_frag_read(pkt->frags, net_pkt_ip_hdr_len(pkt) +
-			     net_pkt_ipv6_ext_len(pkt),
-			     &pos, sizeof(hdr->src_port),
-			     (u8_t *)&hdr->src_port);
-	frag = net_frag_read(frag, pos, &pos, sizeof(hdr->dst_port),
-			     (u8_t *)&hdr->dst_port);
-	frag = net_frag_read(frag, pos, &pos, sizeof(hdr->len),
-			     (u8_t *)&hdr->len);
-	frag = net_frag_read(frag, pos, &pos, sizeof(hdr->chksum),
-			     (u8_t *)&hdr->chksum);
-	if (!frag) {
-		NET_ASSERT(frag);
+	if (net_pkt_read(pkt, &hdr->src_port, sizeof(hdr->src_port)) ||
+	    net_pkt_read(pkt, &hdr->dst_port, sizeof(hdr->dst_port)) ||
+	    net_pkt_read(pkt, &hdr->len,  sizeof(hdr->len)) ||
+	    net_pkt_read(pkt, &hdr->chksum, sizeof(hdr->chksum))) {
 		return NULL;
 	}
 
@@ -181,26 +135,18 @@ struct net_udp_hdr *net_udp_get_hdr(struct net_pkt *pkt,
 struct net_udp_hdr *net_udp_set_hdr(struct net_pkt *pkt,
 				    struct net_udp_hdr *hdr)
 {
-	struct net_buf *frag;
-	u16_t pos;
-
 	if (net_udp_header_fits(pkt, hdr)) {
 		return hdr;
 	}
 
-	frag = net_pkt_write(pkt, pkt->frags, net_pkt_ip_hdr_len(pkt) +
-			     net_pkt_ipv6_ext_len(pkt),
-			     &pos, sizeof(hdr->src_port),
-			     (u8_t *)&hdr->src_port, PKT_WAIT_TIME);
-	frag = net_pkt_write(pkt, frag, pos, &pos, sizeof(hdr->dst_port),
-			     (u8_t *)&hdr->dst_port, PKT_WAIT_TIME);
-	frag = net_pkt_write(pkt, frag, pos, &pos, sizeof(hdr->len),
-			     (u8_t *)&hdr->len, PKT_WAIT_TIME);
-	frag = net_pkt_write(pkt, frag, pos, &pos, sizeof(hdr->chksum),
-			     (u8_t *)&hdr->chksum, PKT_WAIT_TIME);
+	net_pkt_iter_init(pkt);
 
-	if (!frag) {
-		NET_ASSERT(frag);
+	if (net_pkt_skip(pkt, net_pkt_ip_hdr_len(pkt) +
+			 net_pkt_ipv6_ext_len(pkt)) ||
+	    net_pkt_write(pkt, &hdr->src_port, sizeof(hdr->src_port)) ||
+	    net_pkt_write(pkt, &hdr->dst_port, sizeof(hdr->dst_port)) ||
+	    net_pkt_write(pkt, &hdr->len,  sizeof(hdr->len)) ||
+	    net_pkt_write(pkt, &hdr->chksum, sizeof(hdr->chksum))) {
 		return NULL;
 	}
 

@@ -37,6 +37,7 @@
 
 #include "icmpv6.h"
 #include "ipv6.h"
+#include "ipv4.h"
 
 #include "icmpv4.h"
 
@@ -71,8 +72,8 @@ static inline enum net_verdict process_data(struct net_pkt *pkt,
 #endif
 
 	/* If there is no data, then drop the packet. */
-	if (!pkt->frags) {
-		NET_DBG("Corrupted packet (frags %p)", pkt->frags);
+	if (!pkt->buffer) {
+		NET_DBG("Corrupted packet (%p)", pkt);
 		net_stats_update_processing_error(net_pkt_iface(pkt));
 
 		return NET_DROP;
@@ -253,7 +254,7 @@ int net_send_data(struct net_pkt *pkt)
 {
 	int status;
 
-	if (!pkt || !pkt->frags) {
+	if (!pkt || !pkt->buffer) {
 		return -ENODATA;
 	}
 
@@ -261,16 +262,20 @@ int net_send_data(struct net_pkt *pkt)
 		return -EINVAL;
 	}
 
-#if defined(CONFIG_NET_STATISTICS)
+	/* At this point, only overwriting existing data is allowed */
+	net_pkt_set_overwrite(pkt, true);
+	net_pkt_iter_init(pkt);
+	net_pkt_finalize(pkt);
+
 	switch (net_pkt_family(pkt)) {
 	case AF_INET:
+		net_ipv4_finalize(pkt);
 		net_stats_update_ipv4_sent(net_pkt_iface(pkt));
 		break;
 	case AF_INET6:
 		net_stats_update_ipv6_sent(net_pkt_iface(pkt));
 		break;
 	}
-#endif
 
 	status = check_ip_addr(pkt);
 	if (status < 0) {
@@ -350,7 +355,7 @@ int net_recv_data(struct net_if *iface, struct net_pkt *pkt)
 		return -EINVAL;
 	}
 
-	if (!pkt->frags) {
+	if (!pkt->buffer) {
 		return -ENODATA;
 	}
 
@@ -366,6 +371,8 @@ int net_recv_data(struct net_if *iface, struct net_pkt *pkt)
 	}
 
 	net_pkt_set_iface(pkt, iface);
+
+	net_pkt_set_overwrite(pkt, true);
 
 	net_queue_rx(iface, pkt);
 

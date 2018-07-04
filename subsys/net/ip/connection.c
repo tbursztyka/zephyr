@@ -932,7 +932,6 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 	}
 
 	if (best_match >= 0) {
-
 		/* If packet has a listener configured, then check also the
 		 * protocol checksum if that checking is enabled.
 		 * If the checksum calculation fails, then discard the message.
@@ -942,8 +941,8 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 		    net_if_need_calc_rx_checksum(net_pkt_iface(pkt))) {
 			u16_t chksum_calc;
 
-			net_udp_set_chksum(pkt, pkt->frags);
-			chksum_calc = net_udp_get_chksum(pkt, pkt->frags);
+			net_udp_set_chksum(pkt);
+			chksum_calc = net_udp_get_chksum(pkt);
 
 			if (chksum != chksum_calc) {
 				net_stats_update_udp_chkerr(net_pkt_iface(pkt));
@@ -958,8 +957,8 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 			   net_if_need_calc_rx_checksum(net_pkt_iface(pkt))) {
 			u16_t chksum_calc;
 
-			net_tcp_set_chksum(pkt, pkt->frags);
-			chksum_calc = net_tcp_get_chksum(pkt, pkt->frags);
+			net_tcp_set_chksum(pkt);
+			chksum_calc = net_tcp_get_chksum(pkt);
 
 			if (chksum != chksum_calc) {
 				net_stats_update_tcp_seg_chkerr(

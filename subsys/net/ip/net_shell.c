@@ -1046,7 +1046,6 @@ static void ipv6_frag_cb(struct net_ipv6_reassembly *reass,
 
 #if defined(CONFIG_NET_DEBUG_NET_PKT)
 static void allocs_cb(struct net_pkt *pkt,
-		      struct net_buf *buf,
 		      const char *func_alloc,
 		      int line_alloc,
 		      const char *func_free,
@@ -1066,37 +1065,18 @@ static void allocs_cb(struct net_pkt *pkt,
 		}
 	}
 
-	if (buf) {
-		goto buf;
-	}
-
 	if (func_alloc) {
 		if (in_use) {
-			printk("%p/%d\t%5s\t%5s\t%s():%d\n", pkt, pkt->ref,
-			       str, net_pkt_slab2str(pkt->slab), func_alloc,
-			       line_alloc);
+			printk("%p/%d\t%5s\t%s():%d\n",
+			       pkt, pkt->ref, str, func_alloc, line_alloc);
 		} else {
-			printk("%p\t%5s\t%5s\t%s():%d -> %s():%d\n", pkt,
-			       str, net_pkt_slab2str(pkt->slab), func_alloc,
-			       line_alloc, func_free, line_free);
+			printk("%p\t%5s\t%s():%d -> %s():%d\n",
+			       pkt, str, func_alloc, line_alloc,
+			       func_free, line_free);
 		}
 	}
 
 	return;
-buf:
-	if (func_alloc) {
-		struct net_buf_pool *pool = net_buf_pool_get(buf->pool_id);
-
-		if (in_use) {
-			printk("%p/%d\t%5s\t%5s\t%s():%d\n", buf, buf->ref,
-			       str, net_pkt_pool2str(pool), func_alloc,
-			       line_alloc);
-		} else {
-			printk("%p\t%5s\t%5s\t%s():%d -> %s():%d\n", buf,
-			       str, net_pkt_pool2str(pool), func_alloc,
-			       line_alloc, func_free, line_free);
-		}
-	}
 }
 #endif /* CONFIG_NET_DEBUG_NET_PKT */
 
@@ -2620,13 +2600,13 @@ static void context_info(struct net_context *context, void *user_data)
 
 int net_shell_cmd_mem(int argc, char *argv[])
 {
-	struct k_mem_slab *rx, *tx;
-	struct net_buf_pool *rx_data, *tx_data;
+	struct k_mem_slab *pkts;
+	struct net_buf_pool *data;
 
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	net_pkt_get_info(&rx, &tx, &rx_data, &tx_data);
+	net_pkt_get_info(&pkts, &data);
 
 	printk("Fragment length %d bytes\n", CONFIG_NET_BUF_DATA_SIZE);
 
@@ -2635,27 +2615,18 @@ int net_shell_cmd_mem(int argc, char *argv[])
 #if defined(CONFIG_NET_BUF_POOL_USAGE)
 	printk("Address\t\tTotal\tAvail\tName\n");
 
-	printk("%p\t%d\t%u\tRX\n",
-	       rx, rx->num_blocks, k_mem_slab_num_free_get(rx));
+	printk("%p\t%d\t%u\tPkts\n",
+	       pkts, pkts->num_blocks, k_mem_slab_num_free_get(pkts));
 
-	printk("%p\t%d\t%u\tTX\n",
-	       tx, tx->num_blocks, k_mem_slab_num_free_get(tx));
-
-	printk("%p\t%d\t%d\tRX DATA (%s)\n",
-	       rx_data, rx_data->buf_count,
-	       rx_data->avail_count, rx_data->name);
-
-	printk("%p\t%d\t%d\tTX DATA (%s)\n",
-	       tx_data, tx_data->buf_count,
-	       tx_data->avail_count, tx_data->name);
+	printk("%p\t%d\t%d\tDATA (%s)\n",
+	       data, data->buf_count,
+	       data->avail_count, data->name);
 #else
 	printk("(CONFIG_NET_BUF_POOL_USAGE to see free #s)\n");
 	printk("Address\t\tTotal\tName\n");
 
-	printk("%p\t%d\tRX\n", rx, rx->num_blocks);
-	printk("%p\t%d\tTX\n", tx, tx->num_blocks);
-	printk("%p\t%d\tRX DATA\n", rx_data, rx_data->buf_count);
-	printk("%p\t%d\tTX DATA\n", tx_data, tx_data->buf_count);
+	printk("%p\t%d\tPkts\n", pkts, pkts->num_blocks);
+	printk("%p\t%d\tDATA\n", data, data->buf_count);
 #endif /* CONFIG_NET_BUF_POOL_USAGE */
 
 	if (IS_ENABLED(CONFIG_NET_CONTEXT_NET_PKT_POOL)) {

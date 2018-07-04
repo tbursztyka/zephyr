@@ -121,16 +121,7 @@ static inline void ethernet_update_length(struct net_if *iface,
 	}
 
 	if (len < NET_ETH_MINIMAL_FRAME_SIZE - sizeof(struct net_eth_hdr)) {
-		struct net_buf *frag;
-
-		for (frag = pkt->frags; frag; frag = frag->frags) {
-			if (frag->len < len) {
-				len -= frag->len;
-			} else {
-				frag->len = len;
-				len = 0;
-			}
-		}
+		net_pkt_reduce_length(pkt, len);
 	}
 }
 
@@ -157,6 +148,8 @@ static enum net_verdict ethernet_recv(struct net_if *iface,
 	case NET_ETH_PTYPE_IP:
 	case NET_ETH_PTYPE_ARP:
 		net_pkt_set_family(pkt, AF_INET);
+		NET_DBG("IPv4 family");
+
 		family = AF_INET;
 		break;
 	case NET_ETH_PTYPE_IPV6:
@@ -170,8 +163,8 @@ static enum net_verdict ethernet_recv(struct net_if *iface,
 #endif
 	case NET_ETH_PTYPE_LLDP:
 #if defined(CONFIG_NET_LLDP)
-		net_pkt_set_ll(pkt, pkt->frags->data);
-		net_buf_pull(pkt->frags, hdr_len);
+		net_pkt_set_ll(pkt, pkt->buffer->data);
+		net_buf_pull(pkt->buffer, hdr_len);
 		return net_lldp_recv(iface, pkt);
 #else
 		NET_DBG("LLDP Rx agent not enabled");
@@ -222,8 +215,7 @@ static enum net_verdict ethernet_recv(struct net_if *iface,
 		return NET_DROP;
 	}
 
-	net_pkt_set_ll(pkt, pkt->frags->data);
-	net_buf_pull(pkt->frags, hdr_len);
+	net_pkt_set_ll(pkt, hdr_len);
 
 #ifdef CONFIG_NET_ARP
 	if (family == AF_INET && type == NET_ETH_PTYPE_ARP) {
@@ -466,19 +458,21 @@ static struct net_buf *ethernet_fill_header(struct ethernet_context *ctx,
 			       hdr_buf->len, &hdr->src, &hdr->dst);
 	}
 
-	net_pkt_frag_insert(pkt, hdr_buf);
-	net_pkt_set_ll(pkt, hdr_buf->data);
+	net_pkt_buf_insert(pkt, hdr_buf);
+
+	pkt->total_pkt_len += hdr_buf->len;
 
 	return hdr_buf;
 }
 
 void ethernet_remove_header_buf(struct net_pkt *pkt)
 {
-	if (pkt->frags != &eth_hdr_send) {
+	if (pkt->buffer != &eth_hdr_send) {
 		return;
 	}
 
-	pkt->frags = pkt->frags->frags;
+	pkt->buffer = pkt->buffer->frags;
+	pkt->total_pkt_len -= eth_hdr_send.len;
 	eth_hdr_send.frags = NULL;
 	eth_hdr_send.len = 0;
 }
@@ -546,6 +540,8 @@ static int ethernet_send(struct net_if *iface, struct net_pkt *pkt)
 		ret = -ENOMEM;
 		goto error;
 	}
+
+	net_pkt_iter_init(pkt);
 
 	ret = api->send(net_if_get_device(iface), iface, pkt);
 	if (!ret) {

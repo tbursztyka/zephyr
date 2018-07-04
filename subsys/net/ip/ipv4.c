@@ -36,15 +36,6 @@ struct net_pkt *net_ipv4_create(struct net_pkt *pkt,
 				struct net_if *iface,
 				u8_t next_header_proto)
 {
-	struct net_buf *header;
-
-	header = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
-	if (!header) {
-		return NULL;
-	}
-
-	net_pkt_frag_insert(pkt, header);
-
 	NET_IPV4_HDR(pkt)->vhl = 0x45;
 	NET_IPV4_HDR(pkt)->tos = 0x00;
 	NET_IPV4_HDR(pkt)->proto = next_header_proto;
@@ -62,37 +53,28 @@ struct net_pkt *net_ipv4_create(struct net_pkt *pkt,
 	net_ipaddr_copy(&NET_IPV4_HDR(pkt)->src, src);
 
 	net_pkt_set_ip_hdr_len(pkt, sizeof(struct net_ipv4_hdr));
-	net_pkt_set_family(pkt, AF_INET);
 
-	net_buf_add(header, sizeof(struct net_ipv4_hdr));
+	net_pkt_skip(pkt, net_pkt_ip_hdr_len(pkt));
 
 	return pkt;
 }
 
-void net_ipv4_finalize(struct net_pkt *pkt, u8_t next_header_proto)
+void net_ipv4_finalize(struct net_pkt *pkt)
 {
-	/* Set the length of the IPv4 header */
-	size_t total_len;
-
-	net_pkt_compact(pkt);
-
-	total_len = net_pkt_get_len(pkt);
-
-	NET_IPV4_HDR(pkt)->len = htons(total_len);
-
+	NET_IPV4_HDR(pkt)->len = htons(net_pkt_get_len(pkt));
 	NET_IPV4_HDR(pkt)->chksum = 0;
 
 	if (net_if_need_calc_tx_checksum(net_pkt_iface(pkt)) ||
-	    next_header_proto == IPPROTO_ICMP) {
-		NET_IPV4_HDR(pkt)->chksum = ~net_calc_chksum_ipv4(pkt);
+	    NET_IPV4_HDR(pkt)->proto == IPPROTO_ICMP) {
+		NET_IPV4_HDR(pkt)->chksum = net_calc_chksum_ipv4(pkt);
 
 		if (IS_ENABLED(CONFIG_NET_UDP) &&
-		    next_header_proto == IPPROTO_UDP) {
-			net_udp_set_chksum(pkt, pkt->frags);
+		    NET_IPV4_HDR(pkt)->proto == IPPROTO_UDP) {
+			net_udp_set_chksum(pkt);
 		} else if (IS_ENABLED(CONFIG_NET_TCP) &&
-			   next_header_proto == IPPROTO_TCP) {
-			net_tcp_set_chksum(pkt, pkt->frags);
-		} else if (next_header_proto == IPPROTO_ICMP) {
+			   NET_IPV4_HDR(pkt)->proto == IPPROTO_TCP) {
+			net_tcp_set_chksum(pkt);
+		} else if (NET_IPV4_HDR(pkt)->proto == IPPROTO_ICMP) {
 			net_icmpv4_set_chksum(pkt);
 		}
 	}

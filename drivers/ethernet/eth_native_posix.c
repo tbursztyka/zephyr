@@ -125,14 +125,8 @@ static bool need_timestamping(struct gptp_hdr *hdr)
 static struct gptp_hdr *check_gptp_msg(struct net_if *iface,
 				       struct net_pkt *pkt)
 {
+	u8_t *msg_start = net_pkt_ll(pkt);
 	struct gptp_hdr *gptp_hdr;
-	u8_t *msg_start;
-
-	if (net_pkt_ll_reserve(pkt)) {
-		msg_start = net_pkt_ll(pkt);
-	} else {
-		msg_start = net_pkt_ip_data(pkt);
-	}
 
 #if defined(CONFIG_NET_VLAN)
 	if (net_eth_get_vlan_status(iface)) {
@@ -203,24 +197,19 @@ static void update_gptp(struct net_if *iface, struct net_pkt *pkt,
 #define update_gptp(iface, pkt, send)
 #endif /* CONFIG_NET_GPTP */
 
-static int eth_send(struct net_if *iface, struct net_pkt *pkt)
+static int eth_send(struct device *dev,
+		    struct net_if *iface,
+		    struct net_pkt *pkt)
 {
-	struct eth_context *ctx = get_context(iface);
-	struct net_buf *frag;
+	struct eth_context *ctx = dev->driver_data;
 	int count = 0;
 	int ret;
 
-	/* First fragment contains link layer (Ethernet) headers.
-	 */
-	count = net_pkt_ll_reserve(pkt) + pkt->frags->len;
-	memcpy(ctx->send, net_pkt_ll(pkt), count);
+	count = net_pkt_get_len(pkt);
 
-	/* Then the remaining data */
-	frag = pkt->frags->frags;
-	while (frag) {
-		memcpy(ctx->send + count, frag->data, frag->len);
-		count += frag->len;
-		frag = frag->frags;
+	ret = net_pkt_read(pkt, ctx->send, count);
+	if (ret) {
+		return ret;
 	}
 
 	eth_stats_update_bytes_tx(iface, count);
@@ -244,8 +233,6 @@ static int eth_send(struct net_if *iface, struct net_pkt *pkt)
 	ret = eth_write_data(ctx->dev_fd, ctx->send, count);
 	if (ret < 0) {
 		SYS_LOG_DBG("Cannot send pkt %p (%d)", pkt, ret);
-	} else {
-		net_pkt_unref(pkt);
 	}
 
 	return ret < 0 ? ret : 0;
@@ -287,37 +274,24 @@ static inline struct net_if *get_iface(struct eth_context *ctx,
 static int read_data(struct eth_context *ctx, int fd)
 {
 	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
-	int count = 0;
 	struct net_if *iface;
 	struct net_pkt *pkt;
-	struct net_buf *frag;
-	u32_t pkt_len;
-	int ret;
+	int count;
 
-	ret = eth_read_data(fd, ctx->recv, sizeof(ctx->recv));
-	if (ret <= 0) {
+	count = eth_read_data(fd, ctx->recv, sizeof(ctx->recv));
+	if (count <= 0) {
 		return 0;
 	}
 
-	pkt = net_pkt_get_reserve_rx(0, NET_BUF_TIMEOUT);
+	pkt = net_pkt_allocate_with_buffer(ctx->iface, count,
+					   AF_UNSPEC, 0, NET_BUF_TIMEOUT);
 	if (!pkt) {
 		return -ENOMEM;
 	}
 
-	do {
-		frag = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
-		if (!frag) {
-			net_pkt_unref(pkt);
-			return -ENOMEM;
-		}
-
-		net_pkt_frag_add(pkt, frag);
-
-		net_buf_add_mem(frag, ctx->recv + count,
-				min(net_buf_tailroom(frag), ret));
-		ret -= frag->len;
-		count += frag->len;
-	} while (ret > 0);
+	if (net_pkt_write(pkt, ctx->recv, count)) {
+		return -ENOBUFS;
+	}
 
 #if defined(CONFIG_NET_VLAN)
 	{
@@ -343,9 +317,8 @@ static int read_data(struct eth_context *ctx, int fd)
 #endif
 
 	iface = get_iface(ctx, vlan_tag);
-	pkt_len = net_pkt_get_len(pkt);
 
-	eth_stats_update_bytes_rx(iface, pkt_len);
+	eth_stats_update_bytes_rx(iface, count);
 	eth_stats_update_pkts_rx(iface);
 
 	if (IS_ENABLED(CONFIG_NET_STATISTICS_ETHERNET)) {
@@ -359,15 +332,11 @@ static int read_data(struct eth_context *ctx, int fd)
 		}
 	}
 
-	SYS_LOG_DBG("Recv pkt %p len %d", pkt, pkt_len);
+	SYS_LOG_DBG("Recv pkt %p len %d", pkt, count);
 
 	update_gptp(iface, pkt, false);
 
-	if (net_recv_data(iface, pkt) < 0) {
-		net_pkt_unref(pkt);
-	}
-
-	return 0;
+	return net_recv_data(iface, pkt);
 }
 
 static void eth_rx(struct eth_context *ctx)
@@ -564,12 +533,12 @@ static int eth_stop_device(struct device *dev)
 
 static const struct ethernet_api eth_if_api = {
 	.iface_api.init = eth_iface_init,
-	.iface_api.send = eth_send,
 
 	.get_capabilities = eth_posix_native_get_capabilities,
 	.set_config = set_config,
 	.start = eth_start_device,
 	.stop = eth_stop_device,
+	.send = eth_send,
 
 #if defined(CONFIG_NET_VLAN)
 	.vlan_setup = vlan_setup,

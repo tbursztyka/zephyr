@@ -22,7 +22,7 @@
 #include "arp.h"
 #include "net_private.h"
 
-#define NET_BUF_TIMEOUT K_MSEC(100)
+#define PKT_WAIT_TIME K_MSEC(100)
 #define ARP_REQUEST_TIMEOUT K_SECONDS(2)
 
 static bool arp_cache_initialized;
@@ -246,27 +246,18 @@ static inline struct net_pkt *arp_prepare(struct net_if *iface,
 		 */
 		pkt = pending;
 	} else {
-		struct net_buf *frag;
-
-		pkt = net_pkt_get_reserve_tx(NET_BUF_TIMEOUT);
+		pkt = net_pkt_allocate_with_buffer(iface,
+						   sizeof(struct net_arp_hdr),
+						   AF_UNSPEC, IPPROTO_UDP,
+						   PKT_WAIT_TIME);
 		if (!pkt) {
 			return NULL;
 		}
-
-		frag = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
-		if (!frag) {
-			net_pkt_unref(pkt);
-			return NULL;
-		}
-
-		net_pkt_frag_add(pkt, frag);
-		net_pkt_set_iface(pkt, iface);
-		net_pkt_set_family(pkt, AF_UNSPEC);
 	}
 
 	net_pkt_set_vlan_tag(pkt, net_eth_get_vlan_tag(iface));
 
-	net_buf_add(pkt->frags, sizeof(struct net_arp_hdr));
+	net_buf_add(pkt->buffer, sizeof(struct net_arp_hdr));
 
 	hdr = NET_ARP_HDR(pkt);
 
@@ -331,7 +322,7 @@ struct net_pkt *net_arp_prepare(struct net_pkt *pkt,
 	struct net_linkaddr *ll;
 	struct in_addr *addr;
 
-	if (!pkt || !pkt->frags) {
+	if (!pkt || !pkt->buffer) {
 		return NULL;
 	}
 
@@ -425,9 +416,9 @@ static inline void arp_update(struct net_if *iface,
 	net_pkt_lladdr_dst(entry->pending)->addr =
 		(u8_t *) &NET_ETH_HDR(entry->pending)->dst.addr;
 
-	NET_DBG("dst %s pending %p frag %p",
+	NET_DBG("dst %s pending %p buffer %p",
 		net_sprint_ipv4_addr(&entry->ip),
-		entry->pending, entry->pending->frags);
+		entry->pending, entry->pending->buffer);
 
 	pkt = entry->pending;
 	entry->pending = NULL;
@@ -444,29 +435,19 @@ static inline struct net_pkt *arp_prepare_reply(struct net_if *iface,
 						struct net_pkt *req)
 {
 	struct net_pkt *pkt;
-	struct net_buf *frag;
 	struct net_arp_hdr *hdr, *query;
 	struct net_eth_hdr *eth_query;
 
-	pkt = net_pkt_get_reserve_tx(NET_BUF_TIMEOUT);
+	pkt = net_pkt_allocate_with_buffer(iface,
+					   sizeof(struct net_arp_hdr),
+					   AF_UNSPEC, 0, PKT_WAIT_TIME);
 	if (!pkt) {
-		goto fail;
+		return NULL;
 	}
-
-	net_pkt_set_iface(pkt, iface);
-	net_pkt_set_family(pkt, AF_UNSPEC);
 
 	eth_query = NET_ETH_HDR(req);
-
-	frag = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
-	if (!frag) {
-		goto fail;
-	}
-
-	net_pkt_frag_add(pkt, frag);
-
-	hdr = NET_ARP_HDR(pkt);
 	query = NET_ARP_HDR(req);
+	hdr = NET_ARP_HDR(pkt);
 
 	net_pkt_set_vlan_tag(pkt, net_pkt_vlan_tag(req));
 
@@ -490,13 +471,9 @@ static inline struct net_pkt *arp_prepare_reply(struct net_if *iface,
 	net_pkt_lladdr_dst(pkt)->addr = (u8_t*)&hdr->dst_hwaddr.addr;
 	net_pkt_lladdr_dst(pkt)->len = sizeof(struct net_eth_addr);
 
-	net_buf_add(frag, sizeof(struct net_arp_hdr));
+	net_buf_add(pkt->buffer, sizeof(struct net_arp_hdr));
 
 	return pkt;
-
-fail:
-	net_pkt_unref(pkt);
-	return NULL;
 }
 
 enum net_verdict net_arp_input(struct net_pkt *pkt)

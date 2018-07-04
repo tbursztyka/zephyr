@@ -87,7 +87,6 @@ extern char *net_byte_to_hex(char *ptr, u8_t byte, char base, bool pad);
 extern char *net_sprint_ll_addr_buf(const u8_t *ll, u8_t ll_len,
 				    char *buf, int buflen);
 extern u16_t net_calc_chksum(struct net_pkt *pkt, u8_t proto);
-bool net_header_fits(struct net_pkt *pkt, u8_t *hdr, size_t hdr_size);
 
 struct net_icmp_hdr *net_pkt_icmp_data(struct net_pkt *pkt);
 u8_t *net_pkt_icmp_opt_data(struct net_pkt *pkt, size_t opt_len);
@@ -104,39 +103,32 @@ static inline
 struct net_icmp_hdr *net_icmp_header_fits(struct net_pkt *pkt,
 					  struct net_icmp_hdr *hdr)
 {
-	if (net_header_fits(pkt, (u8_t *)hdr, sizeof(*hdr))) {
+	if (hdr == net_pkt_iter_get_pos(pkt) &&
+	    net_pkt_is_contiguous(pkt, sizeof(*hdr))) {
 		return hdr;
 	}
 
 	return NULL;
 }
-
-/* Header may be split between data fragments. In most cases,
- * net_udp_get_hdr() should be used instead.
- */
-struct net_udp_hdr *net_pkt_udp_data(struct net_pkt *pkt);
 
 static inline
 struct net_udp_hdr *net_udp_header_fits(struct net_pkt *pkt,
 					struct net_udp_hdr *hdr)
 {
-	if (net_header_fits(pkt, (u8_t *)hdr, sizeof(*hdr))) {
+	if (hdr == net_pkt_iter_get_pos(pkt) &&
+	    net_pkt_is_contiguous(pkt, sizeof(*hdr))) {
 		return hdr;
 	}
 
 	return NULL;
 }
 
-/* Header may be split between data fragments. In most cases,
- * net_tcp_get_hdr() should be used instead.
- */
-struct net_tcp_hdr *net_pkt_tcp_data(struct net_pkt *pkt);
-
 static inline
 struct net_tcp_hdr *net_tcp_header_fits(struct net_pkt *pkt,
 					struct net_tcp_hdr *hdr)
 {
-	if (net_header_fits(pkt, (u8_t *)hdr, sizeof(*hdr))) {
+	if (hdr == net_pkt_iter_get_pos(pkt) &&
+	    net_pkt_is_contiguous(pkt, sizeof(*hdr))) {
 		return hdr;
 	}
 
@@ -161,12 +153,12 @@ static inline u16_t net_calc_chksum_icmpv6(struct net_pkt *pkt)
 
 static inline u16_t net_calc_chksum_icmpv4(struct net_pkt *pkt)
 {
-	return net_calc_chksum(pkt, IPPROTO_ICMP);
+	return ~net_calc_chksum(pkt, IPPROTO_ICMP);
 }
 
 static inline u16_t net_calc_chksum_udp(struct net_pkt *pkt)
 {
-	return net_calc_chksum(pkt, IPPROTO_UDP);
+	return ~net_calc_chksum(pkt, IPPROTO_UDP);
 }
 
 static inline u16_t net_calc_chksum_tcp(struct net_pkt *pkt)
@@ -246,26 +238,24 @@ static inline void net_hexdump(const char *str,
 }
 
 
-/* Hexdump from all fragments
- * Set full as true to get also the L2 reserve part printed out
+/* Hexdump from all buffer(s)
  */
-static inline void net_hexdump_frags(const char *str,
-				     struct net_pkt *pkt, bool full)
+static inline void net_pkt_hexdump(struct net_pkt *pkt, const char *str)
 {
-	struct net_buf *frag = pkt->frags;
+	struct net_buf *buf = pkt->buffer;
 
 	printk("%s\n", str);
 
-	while (frag) {
-		_hexdump(frag->data, frag->len);
-		frag = frag->frags;
+	while (buf) {
+		_hexdump(buf->data, buf->len);
+		buf = buf->frags;
 	}
 }
 
 /* Print fragment chain */
-static inline void net_print_frags(const char *str, struct net_pkt *pkt)
+static inline void net_print_buffer(const char *str, struct net_pkt *pkt)
 {
-	struct net_buf *frag = pkt->frags;
+	struct net_buf *buf = pkt->buffer;
 
 	if (str) {
 		printk("%s", str);
@@ -273,15 +263,15 @@ static inline void net_print_frags(const char *str, struct net_pkt *pkt)
 
 	printk("%p[%d]", pkt, pkt->ref);
 
-	if (frag) {
+	if (buf) {
 		printk("->");
 	}
 
-	while (frag) {
-		printk("%p[%d/%d]", frag, frag->ref, frag->len);
+	while (buf) {
+		printk("%p[%d/%d]", buf, buf->ref, buf->len);
 
-		frag = frag->frags;
-		if (frag) {
+		buf = buf->frags;
+		if (buf) {
 			printk("->");
 		}
 	}

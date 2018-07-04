@@ -888,11 +888,9 @@ int net_context_accept(struct net_context *context,
 #if defined(CONFIG_NET_UDP)
 static int create_udp_packet(struct net_context *context,
 			     struct net_pkt *pkt,
-			     const struct sockaddr *dst_addr,
-			     struct net_pkt **out_pkt)
+			     const struct sockaddr *dst_addr)
 {
 	int r = 0;
-	struct net_pkt *tmp;
 
 #if defined(CONFIG_NET_IPV6)
 	if (net_pkt_family(pkt) == AF_INET6) {
@@ -903,17 +901,13 @@ static int create_udp_packet(struct net_context *context,
 			return -ENOMEM;
 		}
 
-		tmp = net_udp_insert(pkt,
-				     net_pkt_ip_hdr_len(pkt) +
-				     net_pkt_ipv6_ext_len(pkt),
-				     net_sin((struct sockaddr *)
-					     &context->local)->sin_port,
-				     addr6->sin6_port);
-		if (!tmp) {
+		r = net_udp_create(pkt,
+				   net_sin((struct sockaddr *)
+					   &context->local)->sin_port,
+				   addr6->sin6_port);
+		if (r) {
 			return -ENOMEM;
 		}
-
-		pkt = tmp;
 
 		r = net_ipv6_finalize(pkt, net_context_get_ip_proto(context));
 	} else
@@ -928,24 +922,18 @@ static int create_udp_packet(struct net_context *context,
 			return -ENOMEM;
 		}
 
-		tmp = net_udp_insert(pkt, net_pkt_ip_hdr_len(pkt),
-				     net_sin((struct sockaddr *)
-					     &context->local)->sin_port,
-				     addr4->sin_port);
-		if (!tmp) {
+		r = net_udp_create(pkt,
+				   net_sin((struct sockaddr *)
+					   &context->local)->sin_port,
+				   addr4->sin_port);
+		if (r) {
 			return -ENOMEM;
 		}
-
-		pkt = tmp;
-
-		net_ipv4_finalize(pkt, net_context_get_ip_proto(context));
 	} else
 #endif /* CONFIG_NET_IPV4 */
 	{
 		return -EPROTONOSUPPORT;
 	}
-
-	*out_pkt = pkt;
 
 	return r;
 }
@@ -1020,7 +1008,7 @@ static int sendto(struct net_pkt *pkt,
 			return ret;
 		}
 
-		ret = create_udp_packet(context, pkt, dst_addr, &pkt);
+		ret = create_udp_packet(context, pkt, dst_addr);
 #endif /* CONFIG_NET_UDP */
 		break;
 

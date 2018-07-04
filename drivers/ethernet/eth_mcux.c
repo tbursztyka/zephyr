@@ -441,15 +441,12 @@ static int eth_tx(struct device *dev,
 		  struct net_pkt *pkt)
 {
 	struct eth_context *context = dev->driver_data;
-	const struct net_buf *frag;
-	u8_t *dst;
+	u16_t total_len = net_pkt_get_len(pkt);
 	status_t status;
 	unsigned int imask;
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	bool timestamped_frame;
 #endif
-
-	u16_t total_len = net_pkt_get_len(pkt);
 
 	k_sem_take(&context->tx_buf_sem, K_FOREVER);
 
@@ -458,13 +455,9 @@ static int eth_tx(struct device *dev,
 	 */
 	imask = irq_lock();
 
-	/* Copy the fragments */
-	dst = context->frame_buf;
-	frag = pkt->frags;
-	while (frag) {
-		memcpy(dst, frag->data, frag->len);
-		dst += frag->len;
-		frag = frag->frags;
+	if (net_pkt_read(pkt, context->frame_buf, total_len)) {
+		status = 1;
+		goto out;
 	}
 
 	/* FIXME: Dirty workaround.
@@ -495,7 +488,7 @@ static int eth_tx(struct device *dev,
 		}
 	}
 #endif
-
+out:
 	irq_unlock(imask);
 
 	if (status) {
@@ -509,13 +502,11 @@ static int eth_tx(struct device *dev,
 static void eth_rx(struct device *iface)
 {
 	struct eth_context *context = iface->driver_data;
-	struct net_buf *prev_buf;
-	struct net_pkt *pkt;
-	const u8_t *src;
+	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	u32_t frame_length = 0;
+	struct net_pkt *pkt;
 	status_t status;
 	unsigned int imask;
-	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	enet_ptp_time_data_t ptpTimeData;
@@ -539,7 +530,15 @@ static void eth_rx(struct device *iface)
 		return;
 	}
 
-	pkt = net_pkt_get_reserve_rx(K_NO_WAIT);
+	if (sizeof(context->frame_buf) < frame_length) {
+		SYS_LOG_ERR("frame too large (%d)", frame_length);
+		status = ENET_ReadFrame(ENET, &context->enet_handle, NULL, 0);
+		assert(status == kStatus_Success);
+		return;
+	}
+
+	pkt = net_pkt_allocate_with_buffer(context->iface, frame_length,
+					   AF_UNSPEC, 0, K_NO_WAIT);
 	if (!pkt) {
 		/* We failed to get a receive buffer.  We don't add
 		 * any further logging here because the allocator
@@ -549,14 +548,6 @@ static void eth_rx(struct device *iface)
 		 * only report failure if there is no frame to flush,
 		 * which cannot happen in this context.
 		 */
-		status = ENET_ReadFrame(ENET, &context->enet_handle, NULL, 0);
-		assert(status == kStatus_Success);
-		return;
-	}
-
-	if (sizeof(context->frame_buf) < frame_length) {
-		SYS_LOG_ERR("frame too large (%d)", frame_length);
-		net_pkt_unref(pkt);
 		status = ENET_ReadFrame(ENET, &context->enet_handle, NULL, 0);
 		assert(status == kStatus_Success);
 		return;
@@ -576,39 +567,13 @@ static void eth_rx(struct device *iface)
 		return;
 	}
 
-	src = context->frame_buf;
-	prev_buf = NULL;
-	do {
-		struct net_buf *pkt_buf;
-		size_t frag_len;
-
-		pkt_buf = net_pkt_get_frag(pkt, K_NO_WAIT);
-		if (!pkt_buf) {
-			irq_unlock(imask);
-			SYS_LOG_ERR("Failed to get fragment buf");
-			net_pkt_unref(pkt);
-			assert(status == kStatus_Success);
-			return;
-		}
-
-		if (!prev_buf) {
-			net_pkt_frag_insert(pkt, pkt_buf);
-		} else {
-			net_buf_frag_insert(prev_buf, pkt_buf);
-		}
-
-		prev_buf = pkt_buf;
-
-		frag_len = net_buf_tailroom(pkt_buf);
-		if (frag_len > frame_length) {
-			frag_len = frame_length;
-		}
-
-		memcpy(pkt_buf->data, src, frag_len);
-		net_buf_add(pkt_buf, frag_len);
-		src += frag_len;
-		frame_length -= frag_len;
-	} while (frame_length > 0);
+	status = net_pkt_write(pkt, context->frame_buf, frame_length);
+	if (status) {
+		irq_unlock(imask);
+		SYS_LOG_ERR("ENET_ReadFrame failed: %d", (int)status);
+		net_pkt_unref(pkt);
+		return;
+	}
 
 #if defined(CONFIG_NET_VLAN)
 	{
@@ -620,6 +585,8 @@ static void eth_rx(struct device *iface)
 
 			net_pkt_set_vlan_tci(pkt, ntohs(hdr_vlan->vlan.tci));
 			vlan_tag = net_pkt_vlan_tag(pkt);
+
+			net_pkt_set_iface(pkt, get_iface(context, vlan_tag));
 
 #if CONFIG_NET_TC_RX_COUNT > 1
 			{
@@ -650,9 +617,7 @@ static void eth_rx(struct device *iface)
 
 	irq_unlock(imask);
 
-	if (net_recv_data(get_iface(context, vlan_tag), pkt) < 0) {
-		net_pkt_unref(pkt);
-	}
+	net_recv_data(get_iface(context, vlan_tag), pkt);
 }
 
 #if defined(CONFIG_PTP_CLOCK_MCUX)

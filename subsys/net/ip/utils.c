@@ -419,52 +419,49 @@ static u16_t calc_chksum(u16_t sum, const u8_t *ptr, u16_t len)
 	return sum;
 }
 
-static inline u16_t calc_chksum_pkt(u16_t sum, struct net_pkt *pkt,
-				    u16_t upper_layer_len)
+static inline u16_t calc_chksum_pkt(struct net_pkt *pkt, u16_t sum)
 {
 	u16_t proto_len = net_pkt_ip_hdr_len(pkt) +
 		net_pkt_ipv6_ext_len(pkt);
-	struct net_buf *frag;
-	u16_t offset;
-	s16_t len;
-	u8_t *ptr;
+	struct net_pkt_iter backup;
+	struct net_pkt_iter *iter;
+	size_t len;
 
-	ARG_UNUSED(upper_layer_len);
+	net_pkt_iter_backup(pkt, &backup);
 
-	frag = net_frag_skip(pkt->frags, proto_len, &offset, 0);
-	if (!frag) {
+	net_pkt_iter_init(pkt);
+
+	if (net_pkt_skip(pkt, proto_len)) {
 		NET_DBG("Trying to read past pkt len (proto len %d)",
 			proto_len);
+		net_pkt_iter_restore(pkt, &backup);
+
 		return 0;
 	}
 
-	NET_ASSERT(offset <= frag->len);
+	iter = &pkt->iter;
 
-	ptr = frag->data + offset;
-	len = frag->len - offset;
+	while (iter->buf) {
+		len = iter->buf->len - (iter->pos - (void *)iter->buf->data);
 
-	while (frag) {
-		sum = calc_chksum(sum, ptr, len);
-		frag = frag->frags;
-		if (!frag) {
-			break;
-		}
+		sum = calc_chksum(sum, iter->pos, len);
 
-		ptr = frag->data;
+		net_pkt_iter_update(pkt, len, false);
 
-		/* Do we need to take first byte from next fragment */
-		if (len % 2) {
-			u16_t tmp = *ptr;
+		/* Do we need to take first byte from next buffer? */
+		if (len % 2 && iter->buf) {
+			u16_t tmp = *(u8_t *)iter->pos;
+
 			sum += tmp;
 			if (sum < tmp) {
 				sum++;
 			}
-			len = frag->len - 1;
-			ptr++;
-		} else {
-			len = frag->len;
+
+			net_pkt_iter_update(pkt, 1, false);
 		}
 	}
+
+	net_pkt_iter_restore(pkt, &backup);
 
 	return sum;
 }
@@ -502,7 +499,7 @@ u16_t net_calc_chksum(struct net_pkt *pkt, u8_t proto)
 		return 0;
 	}
 
-	sum = calc_chksum_pkt(sum, pkt, upper_layer_len);
+	sum = calc_chksum_pkt(pkt, sum);
 
 	sum = (sum == 0) ? 0xffff : htons(sum);
 
@@ -518,24 +515,9 @@ u16_t net_calc_chksum_ipv4(struct net_pkt *pkt)
 
 	sum = (sum == 0) ? 0xffff : htons(sum);
 
-	return sum;
+	return ~sum;
 }
 #endif /* CONFIG_NET_IPV4 */
-
-/* Check if the first fragment of the packet can hold certain size
- * memory area. The start of the said area must be inside the first
- * fragment. This helper is used when checking whether various protocol
- * headers are split between two fragments.
- */
-bool net_header_fits(struct net_pkt *pkt, u8_t *hdr, size_t hdr_size)
-{
-	if (hdr && hdr > pkt->frags->data &&
-	    (hdr + hdr_size) <= (pkt->frags->data + pkt->frags->len)) {
-		return true;
-	}
-
-	return false;
-}
 
 #if defined(CONFIG_NET_IPV6) || defined(CONFIG_NET_IPV4)
 static bool convert_port(const char *buf, u16_t *port)

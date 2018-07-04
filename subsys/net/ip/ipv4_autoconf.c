@@ -29,7 +29,7 @@ static struct k_delayed_work ipv4auto_timer;
 /* Track currently active timers */
 static sys_slist_t ipv4auto_ifaces;
 
-#define BUF_ALLOC_TIMEOUT K_MSEC(100)
+#define PKT_ALLOC_TIMEOUT K_MSEC(100)
 
 static struct net_pkt *ipv4_autoconf_prepare_arp(struct net_if *iface)
 {
@@ -37,30 +37,17 @@ static struct net_pkt *ipv4_autoconf_prepare_arp(struct net_if *iface)
 	struct net_pkt *pkt;
 	struct net_buf *frag;
 
-	pkt = net_pkt_get_reserve_tx(BUF_ALLOC_TIMEOUT);
+	pkt = net_pkt_allocate_with_buffer(iface,
+					   sizeof(struct net_arp_hdr),
+					   AF_UNSPEC, 0, PKT_ALLOC_TIMEOUT);
 	if (!pkt) {
-		goto fail;
+		return NULL;
 	}
 
-	frag = net_pkt_get_frag(pkt, BUF_ALLOC_TIMEOUT);
-	if (!frag) {
-		goto fail;
-	}
-
-	net_pkt_frag_add(pkt, frag);
-	net_pkt_set_iface(pkt, iface);
-	net_pkt_set_family(pkt, AF_INET);
 	net_pkt_set_ipv4_auto(pkt, true);
 
 	return net_arp_prepare(pkt, &cfg->ipv4auto.requested_ip,
 			       &cfg->ipv4auto.current_ip);
-
-fail:
-	if (pkt) {
-		net_pkt_unref(pkt);
-	}
-
-	return NULL;
 }
 
 static void ipv4_autoconf_send_probe(struct net_if_ipv4_autoconf *ipv4auto)

@@ -35,8 +35,9 @@ struct dhcp_msg {
 	u8_t chaddr[16];	/* Client hardware address */
 } __packed;
 
-#define SIZE_OF_SNAME	64
-#define SIZE_OF_FILE	128
+#define SIZE_OF_SNAME		64
+#define SIZE_OF_FILE		128
+#define SIZE_OF_MAGIC_COOKIE	4
 
 #define DHCPV4_MSG_BROADCAST	0x8000
 #define DHCPV4_MSG_UNICAST	0x0000
@@ -44,8 +45,9 @@ struct dhcp_msg {
 #define DHCPV4_MSG_BOOT_REQUEST	1
 #define DHCPV4_MSG_BOOT_REPLY	2
 
-#define HARDWARE_ETHERNET_TYPE 1
-#define HARDWARE_ETHERNET_LEN  6
+#define HARDWARE_ETHERNET_TYPE	1
+#define HARDWARE_ETHERNET_LEN	6
+#define CHADDR_PADDING_LEN	10
 
 #define DHCPV4_SERVER_PORT  67
 #define DHCPV4_CLIENT_PORT  68
@@ -75,6 +77,21 @@ enum dhcpv4_msg_type {
 #define DHCPV4_OPTIONS_RENEWAL		58
 #define DHCPV4_OPTIONS_REBINDING	59
 #define DHCPV4_OPTIONS_END		255
+
+/* Useful size macros */
+#define DHCPV4_OLV_MSG_REQ_IPADDR	6
+#define DHCPV4_OLV_MSG_TYPE_SIZE	3
+#define DHCPV4_OLV_MSG_SERVER_ID	6
+#define DHCPV4_OLV_MSG_REQ_LIST		5
+
+#define DHCPV4_OLV_END_SIZE		1
+
+#define DHCPV4_MESSAGE_SIZE		(sizeof(struct dhcp_msg) +	\
+					 CHADDR_PADDING_LEN +		\
+					 SIZE_OF_SNAME + SIZE_OF_FILE + \
+					 SIZE_OF_MAGIC_COOKIE + 	\
+					 DHCPV4_OLV_MSG_TYPE_SIZE +	\
+					 DHCPV4_OLV_END_SIZE)
 
 /* TODO:
  * 1) Support for UNICAST flag (some dhcpv4 servers will not reply if
