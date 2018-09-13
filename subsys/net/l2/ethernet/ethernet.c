@@ -36,6 +36,18 @@ const struct net_eth_addr *net_eth_broadcast_addr(void)
 	return &broadcast_eth_addr;
 }
 
+#if defined(CONFIG_NET_VLAN)
+static u8_t eth_hdr_buffer[sizeof(struct net_eth_vlan_hdr)];
+#else
+static u8_t eth_hdr_buffer[sizeof(struct net_eth_hdr)];
+#endif /* CONFIG_NET_VLAN */
+
+static struct net_buf eth_hdr_send = {
+	.data = eth_hdr_buffer,
+	.size = sizeof(eth_hdr_buffer),
+	.__buf = eth_hdr_buffer,
+};
+
 void net_eth_ipv6_mcast_to_mac_addr(const struct in6_addr *ipv6_addr,
 				    struct net_eth_addr *mac_addr)
 {
@@ -406,19 +418,16 @@ static struct net_buf *ethernet_fill_header(struct ethernet_context *ctx,
 					    struct net_pkt *pkt,
 					    u32_t ptype)
 {
-	struct net_buf *hdr_frag;
+	struct net_buf *hdr_buf;
 	struct net_eth_hdr *hdr;
 
-	hdr_frag = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
-	if (!hdr_frag) {
-		return NULL;
-	}
+	hdr_buf = &eth_hdr_send;
 
 	if (IS_ENABLED(CONFIG_NET_VLAN) &&
 	    net_eth_is_vlan_enabled(ctx, net_pkt_iface(pkt))) {
 		struct net_eth_vlan_hdr *hdr_vlan;
 
-		hdr_vlan = (struct net_eth_vlan_hdr *)(hdr_frag->data);
+		hdr_vlan = (struct net_eth_vlan_hdr *)(hdr_buf->data);
 
 		if (!ethernet_fill_in_dst_on_ipv4_mcast(pkt, &hdr_vlan->dst) &&
 		    !ethernet_fill_in_dst_on_ipv6_mcast(pkt, &hdr_vlan->dst)) {
@@ -432,13 +441,14 @@ static struct net_buf *ethernet_fill_header(struct ethernet_context *ctx,
 		hdr_vlan->type = ptype;
 		hdr_vlan->vlan.tpid = htons(NET_ETH_PTYPE_VLAN);
 		hdr_vlan->vlan.tci = htons(net_pkt_vlan_tci(pkt));
+		net_buf_add(hdr_buf, sizeof(struct net_eth_vlan_hdr));
 
 		print_vlan_ll_addrs(pkt, ntohs(hdr_vlan->type),
 				    net_pkt_vlan_tci(pkt),
-				    hdr_frag->len,
+				    hdr_buf->len,
 				    &hdr_vlan->src, &hdr_vlan->dst);
 	} else {
-		hdr = (struct net_eth_hdr *)(hdr_frag->data);
+		hdr = (struct net_eth_hdr *)(hdr_buf->data);
 
 		if (!ethernet_fill_in_dst_on_ipv4_mcast(pkt, &hdr->dst) &&
 		    !ethernet_fill_in_dst_on_ipv6_mcast(pkt, &hdr->dst)) {
@@ -450,16 +460,27 @@ static struct net_buf *ethernet_fill_header(struct ethernet_context *ctx,
 		       sizeof(struct net_eth_addr));
 
 		hdr->type = ptype;
-		net_buf_add(hdr_frag, sizeof(struct net_eth_hdr));
+		net_buf_add(hdr_buf, sizeof(struct net_eth_hdr));
 
 		print_ll_addrs(pkt, ntohs(hdr->type),
-			       hdr_frag->len, &hdr->src, &hdr->dst);
+			       hdr_buf->len, &hdr->src, &hdr->dst);
 	}
 
-	net_pkt_frag_insert(pkt, hdr_frag);
-	net_pkt_set_ll(pkt, hdr_frag->data);
+	net_pkt_frag_insert(pkt, hdr_buf);
+	net_pkt_set_ll(pkt, hdr_buf->data);
 
-	return hdr_frag;
+	return hdr_buf;
+}
+
+void ethernet_remove_header_buf(struct net_pkt *pkt)
+{
+	if (pkt->frags != &eth_hdr_send) {
+		return;
+	}
+
+	pkt->frags = pkt->frags->frags;
+	eth_hdr_send.frags = NULL;
+	eth_hdr_send.len = 0;
 }
 
 static int ethernet_send(struct net_if *iface, struct net_pkt *pkt)
@@ -533,6 +554,8 @@ static int ethernet_send(struct net_if *iface, struct net_pkt *pkt)
  	}
 
 error:
+	ethernet_remove_header_buf(pkt);
+
 	return ret;
 }
 
