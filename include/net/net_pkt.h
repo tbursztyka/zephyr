@@ -1185,6 +1185,18 @@ void net_pkt_get_info(struct k_mem_slab **pkts,
 		      struct net_buf_pool **data);
 
 /**
+ * @brief Convert net_pkt pointer to data pointer, cast to the specified type.
+ *
+ * @param _pkt  Network packet.
+ * @param _type Data type to cast to on return.
+ * @return Pointer of the specified type.
+ *
+ * @note Ensure first, that there is enough contiguous data in net_pkt
+ *       with net_pkt_pullup().
+ */
+#define net_pkt_tod(_pkt, _type) ((_type)((_pkt)->iter.pos))
+
+/**
  * @}
  */
 
