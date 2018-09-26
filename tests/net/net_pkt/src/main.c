@@ -53,6 +53,7 @@ struct icmp_hdr {
 	u16_t chksum;
 } __packed;
 
+#if 0
 static const char example_data[] =
 	"0123456789abcdefghijklmnopqrstuvxyz!#¤%&/()=?"
 	"0123456789abcdefghijklmnopqrstuvxyz!#¤%&/()=?"
@@ -1177,6 +1178,7 @@ static void test_net_pkt_append_memset(void)
 
 	net_pkt_unref(pkt);
 }
+#endif
 
 static struct net_buf *test_net_buf_make(void *data, size_t len)
 {
@@ -1254,6 +1256,7 @@ static void test_net_pkt_pullup_and_mtod(void)
 void test_main(void)
 {
 	ztest_test_suite(net_pkt_tests,
+#if 0
 			 ztest_unit_test(test_ipv6_multi_frags),
 			 ztest_unit_test(test_fragment_copy),
 			 ztest_unit_test(test_pkt_read_append),
@@ -1262,6 +1265,7 @@ void test_main(void)
 			 ztest_unit_test(test_fragment_split),
 			 ztest_unit_test(test_pkt_pull),
 			 ztest_unit_test(test_net_pkt_append_memset),
+#endif
 			 ztest_unit_test(test_net_pkt_pullup_and_mtod)
 			 );
 
