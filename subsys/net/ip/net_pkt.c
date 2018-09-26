@@ -888,6 +888,25 @@ void net_pkt_get_info(struct k_mem_slab **pkts,
 	}
 }
 
+struct net_pkt *net_pkt_pullup(struct net_pkt *pkt, int len)
+{
+	bool error = false;
+
+	net_pkt_iter_init(pkt);
+
+	if (net_pkt_is_contiguous(pkt, len) == false) {
+
+		if (net_pkt_skip(pkt, len) < 0) {
+			net_pkt_unref(pkt);
+			error = true;
+		} else {
+			net_pkt_iter_init(pkt);
+		}
+	}
+
+	return error ? NULL : pkt;
+}
+
 void net_pkt_init(void)
 {
 	NET_DBG("Allocating %u packets (%zu bytes) and %d net_buf (%u bytes)",

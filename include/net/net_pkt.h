@@ -1197,6 +1197,16 @@ void net_pkt_get_info(struct k_mem_slab **pkts,
 #define net_pkt_tod(_pkt, _type) ((_type)((_pkt)->iter.pos))
 
 /**
+ * @brief Make first len bytes contiguous.
+ *
+ * @param pkt Network packet.
+ * @param len Length to make contiguous.
+ * @return On error returns NULL and net_pkt is unrefenced,
+ *         net_pkt pointer otherwise.
+ */
+struct net_pkt *net_pkt_pullup(struct net_pkt *pkt, int len);
+
+/**
  * @}
  */
 
