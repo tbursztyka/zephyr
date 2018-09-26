@@ -22,18 +22,17 @@ static inline enum net_verdict dummy_recv(struct net_if *iface,
 	return NET_CONTINUE;
 }
 
-static inline enum net_verdict dummy_send(struct net_if *iface,
-					  struct net_pkt *pkt)
+static inline int dummy_send(struct net_if *iface, struct net_pkt *pkt)
 {
 	net_if_queue_tx(iface, pkt);
 
 	return NET_OK;
 }
 
-static inline u16_t dummy_reserve(struct net_if *iface, void *unused)
+static inline int dummy_enable(struct net_if *iface, bool state)
 {
 	ARG_UNUSED(iface);
-	ARG_UNUSED(unused);
+	ARG_UNUSED(state);
 
 	return 0;
 }
@@ -43,5 +42,4 @@ static enum net_l2_flags dummy_flags(struct net_if *iface)
 	return NET_L2_MULTICAST;
 }
 
-NET_L2_INIT(DUMMY_L2, dummy_recv, dummy_send, dummy_reserve, NULL, \
-	    dummy_flags);
+NET_L2_INIT(DUMMY_L2, dummy_recv, dummy_send, dummy_enable, dummy_flags);
