@@ -1178,6 +1178,79 @@ static void test_net_pkt_append_memset(void)
 	net_pkt_unref(pkt);
 }
 
+static struct net_buf *test_net_buf_make(void *data, size_t len)
+{
+	struct net_buf *nbuf = k_calloc(1, sizeof(struct net_buf));
+
+	nbuf->data = k_calloc(1, len);
+	nbuf->size = nbuf->len = len;
+
+	if (len) {
+		memcpy(data, nbuf->data, len);
+	}
+
+	return nbuf;
+}
+
+static void test_net_pkt_pullup_and_mtod(void)
+{
+	uint8_t second[20], first[8];
+	const size_t first_len = sizeof(first);
+	const size_t second_len = sizeof(second);
+	struct net_pkt *pkt = k_calloc(1, sizeof(struct net_pkt));
+	struct net_buf *nbuf;
+	void *data;
+
+	memset(first, '1', first_len);
+	memset(second, '2', second_len);
+
+	pkt->ref = 2; /* This is to ensure that the packet is unreferenced
+		       * on unsuccessfull net_pkt_pullup(),
+		       * but not freed through pool allocator.
+		       */
+
+	nbuf = test_net_buf_make(second, second_len);
+
+	net_pkt_buf_insert(pkt, nbuf);
+
+	zassert_true(net_pkt_pullup(pkt, second_len) == pkt,
+			"Simple pullup failed");
+
+	data = net_pkt_tod(pkt, void *);
+
+	zassert_true(memcmp(data, second, second_len) == 0,
+			"Wrong net_pkt_tod() data");
+
+	zassert_true(net_pkt_pullup(pkt, second_len - 1) == pkt,
+			"Simple undershoot pullup failed");
+
+	nbuf = test_net_buf_make(first, first_len);
+
+	net_pkt_buf_insert(pkt, nbuf);
+
+	pkt = net_pkt_pullup(pkt, first_len + second_len);
+
+	zassert_true(pkt != NULL, "Failed to merge on valid net_pkt_pullup()");
+
+	data = net_pkt_tod(pkt, void *);
+
+	zassert_true(data != NULL, "No net_pkt_tod() data after merge");
+
+	zassert_true(memcmp(data, first, first_len) == 0,
+			"Wrong first fragment data after merge");
+
+	data += sizeof(first);
+
+	zassert_true(memcmp(data, second, second_len) == 0,
+			"Wrong second fragment data after merge");
+
+	zassert_true(net_pkt_pullup(pkt, first_len + second_len + 1)
+			== NULL, "Invalid net_pkt_pullup() succeeded");
+
+	zassert_true(pkt->ref == 1, "Packet isn't unreferenced"
+			"on unsuccessfull net_pkt_pullup()");
+}
+
 void test_main(void)
 {
 	ztest_test_suite(net_pkt_tests,
@@ -1188,7 +1261,8 @@ void test_main(void)
 			 ztest_unit_test(test_fragment_compact),
 			 ztest_unit_test(test_fragment_split),
 			 ztest_unit_test(test_pkt_pull),
-			 ztest_unit_test(test_net_pkt_append_memset)
+			 ztest_unit_test(test_net_pkt_append_memset),
+			 ztest_unit_test(test_net_pkt_pullup_and_mtod)
 			 );
 
 	ztest_run_test_suite(net_pkt_tests);
