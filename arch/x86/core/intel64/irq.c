@@ -136,6 +136,9 @@ int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
 
 			__ASSERT(irte >= 0, "IRTE allocation must succeed");
 
+			printk("Allocated irte %u for vector/irq %u/%u\n",
+			       irte, vector, irq);
+
 			vtd_set_irte_vector(vtd, irte, vector);
 			vtd_set_irte_irq(vtd, irte, irq);
 		}

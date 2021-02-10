@@ -190,6 +190,15 @@ uint32_t z_ioapic_num_rtes(void)
 	return ioapic_rtes;
 }
 
+bool ioapic_irr(unsigned int irq)
+{
+	uint32_t rte_lo;
+
+	rte_lo = ioApicRedGetLo(irq);
+
+	return (rte_lo & BIT(14));
+}
+
 /**
  *
  * @brief Enable a specified APIC interrupt input line
@@ -201,6 +210,8 @@ uint32_t z_ioapic_num_rtes(void)
  */
 void z_ioapic_irq_enable(unsigned int irq)
 {
+	printk("IOAPIC unmask IRQ %u (IRR %u)\n\n", irq, ioapic_irr(irq));
+
 	IoApicRedUpdateLo(irq, 0, IOAPIC_INT_MASK);
 }
 
@@ -387,10 +398,15 @@ void z_ioapic_irq_set(unsigned int irq, unsigned int vector, uint32_t flags)
 	}
 
 	if (irte_idx >= 0 && !vtd_irte_is_msi(vtd, irte_idx)) {
+		printk("Got irte %u for vector/irq %u/%u\n",
+		       irte_idx, vector, irq);
+
 		/* Enable interrupt remapping format and set the irte index */
 		rteValue = IOAPIC_VTD_REMAP_FORMAT |
 			IOAPIC_VTD_INDEX(irte_idx);
 		ioApicRedSetHi(irq, rteValue);
+		printk("IOAPIC Hi 0x%x: irte_idx %u IR format set\n",
+		       rteValue, (rteValue >> 17));
 
 		/* Remapped: delivery mode is Fixed (000) and
 		 * destination mode is no longer present as it is replaced by
@@ -401,6 +417,11 @@ void z_ioapic_irq_set(unsigned int irq, unsigned int vector, uint32_t flags)
 			(flags & IOAPIC_TRIGGER_MASK) |
 			(flags & IOAPIC_POLARITY_MASK);
 		ioApicRedSetLo(irq, rteValue);
+		printk("IOAPIC Lo 0x%x: %s vector %u trigger 0x%x polarity 0x%x\n",
+		       rteValue, rteValue & IOAPIC_INT_MASK ? "Masked" : "Unmasked",
+		       rteValue & IOAPIC_VEC_MASK,
+		       rteValue & IOAPIC_TRIGGER_MASK,
+		       rteValue & IOAPIC_POLARITY_MASK);
 
 		vtd_remap(vtd, irte_idx, vector, flags, ioapic_id);
 	} else
@@ -551,7 +572,6 @@ static void IoApicRedUpdateLo(unsigned int irq,
 {
 	ioApicRedSetLo(irq, (ioApicRedGetLo(irq) & ~mask) | (value & mask));
 }
-
 
 #ifdef CONFIG_PM_DEVICE
 SYS_DEVICE_DEFINE("ioapic", ioapic_init, ioapic_device_ctrl, PRE_KERNEL_1,

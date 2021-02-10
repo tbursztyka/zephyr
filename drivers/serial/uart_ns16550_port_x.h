@@ -75,6 +75,8 @@ static void irq_config_func_@NUM@(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
+	printk("UART @NUM@ irq setup\n");
+
 #if DT_INST_ON_BUS(@NUM@, pcie)
 #if DT_INST_IRQN(@NUM@) == PCIE_IRQ_DETECT
 

@@ -115,6 +115,8 @@ int sys_clock_driver_init(const struct device *dev)
 
 	DEVICE_MMIO_TOPLEVEL_MAP(hpet_regs, K_MEM_CACHE_NONE);
 
+	printk("HPET irq setup\n");
+
 	IRQ_CONNECT(DT_INST_IRQN(0),
 		    DT_INST_IRQ(0, priority),
 		    hpet_isr, 0, DT_INST_IRQ(0, sense));

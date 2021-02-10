@@ -138,7 +138,7 @@ uint8_t pcie_msi_vectors_allocate(pcie_bdf_t bdf,
 				  msi_vector_t *vectors,
 				  uint8_t n_vector)
 {
-	uint32_t req_vectors;
+	uint32_t req_vectors = 0;
 	uint32_t base;
 	bool msi;
 

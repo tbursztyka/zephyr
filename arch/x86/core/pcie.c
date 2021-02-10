@@ -255,6 +255,7 @@ uint8_t arch_pcie_msi_vectors_allocate(unsigned int priority,
 			 * to get it.
 			 */
 			irq = pcie_get_irq(vectors->bdf);
+			printk("Got the irq from PCIe bus %u\n", irq);
 		} else {
 			irq = arch_irq_allocate();
 		}
@@ -277,6 +278,10 @@ uint8_t arch_pcie_msi_vectors_allocate(unsigned int priority,
 		vtd_set_irte_irq(vtd, vectors[i].arch.irte,
 				 vectors[i].arch.irq);
 		vtd_set_irte_msi(vtd, vectors[i].arch.irte, true);
+
+		printk("Allocated MSI irte %u for vector/irq %u/%u\n",
+		       vectors[i].arch.irte, vectors[i].arch.vector,
+		       vectors[i].arch.irq);
 #endif
 		prev_vector = vectors[i].arch.vector;
 	}

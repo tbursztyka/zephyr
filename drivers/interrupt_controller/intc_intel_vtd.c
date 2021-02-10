@@ -29,6 +29,8 @@
 
 #include "intc_intel_vtd.h"
 
+extern bool ioapic_irr(unsigned int irq);
+
 static inline void vtd_pause_cpu(void)
 {
 	__asm__ volatile("pause" ::: "memory");
@@ -95,6 +97,8 @@ static void vtd_flush_irte_from_cache(const struct device *dev,
 	struct vtd_ictl_data *data = dev->data;
 
 	if(!data->pwc) {
+		printk("Flushing cache for irte %u\n", irte_idx);
+
 		sys_dcache_range(&data->irte[irte_idx],
 				 sizeof(union vtd_irte), K_CACHE_WB);
 	}
@@ -286,6 +290,7 @@ static void fault_event_isr(const void *arg)
 				(VTD_FRCD_REG_SIZE * f_idx) + 8, fault_h);
 		f_idx++;
 	}
+
 out:
 	/* Clearing fault status */
 	vtd_write_reg32(dev, VTD_FSTS_REG, VTD_FSTS_CLEAR(status));
@@ -384,6 +389,11 @@ static int vtd_ictl_remap(const struct device *dev,
 	irte.bits.redirection_hint = 1;
 	irte.bits.dst_mode = 1; /* Always logical */
 	irte.bits.present = 1;
+
+	printk("IRTE vector %u - dst_id 0x%x - "
+	       "dst_mode 1 - dm 0x%x - rh 1 - tm 0x%x\n",
+	       vector, irte.bits.dst_id,
+	       irte.bits.delivery_mode, irte.bits.trigger_mode);
 
 	data->irte[irte_idx].parts.low = irte.parts.low;
 	data->irte[irte_idx].parts.high = irte.parts.high;

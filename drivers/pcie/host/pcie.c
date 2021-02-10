@@ -156,8 +156,11 @@ unsigned int pcie_alloc_irq(pcie_bdf_t bdf)
 		data &= ~0xffU;
 		data |= irq;
 		pcie_conf_write(bdf, PCIE_CONF_INTR, data);
+
+		printk("Allocated IRQ for PCIe %u\n", irq);
 	} else {
 		arch_irq_set_used(irq);
+		printk("Using IRQ from PCIe %u\n", irq);
 	}
 
 	return irq;
@@ -181,6 +184,8 @@ bool pcie_connect_dynamic_irq(pcie_bdf_t bdf,
 	if (pcie_is_msi(bdf)) {
 		msi_vector_t vector;
 
+		printk("Device is on MSI, remapping\n");
+
 		if ((pcie_msi_vectors_allocate(bdf, priority,
 					       &vector, 1) == 0) ||
 		    !pcie_msi_vector_connect(bdf, &vector,
@@ -190,6 +195,8 @@ bool pcie_connect_dynamic_irq(pcie_bdf_t bdf,
 	} else
 #endif /* CONFIG_PCIE_MSI && CONFIG_PCIE_MSI_MULTI_VECTOR */
 	{
+		printk("Device is not on MSI\n");
+
 		if (irq_connect_dynamic(irq, priority, routine,
 					parameter, flags) < 0) {
 			return false;
