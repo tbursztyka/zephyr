@@ -29,6 +29,9 @@ static void find_rsdp(void)
 {
 	uint8_t *bda_seg;
 
+	rsdp = (struct acpi_rsdp *)((uintptr_t)0x7ac4e014);
+	is_rdsp_searched = true;
+
 	if (is_rdsp_searched) {
 		/* Looking up for RSDP has already been done */
 		return;
