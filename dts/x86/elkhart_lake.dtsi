@@ -57,7 +57,7 @@
 			clock-frequency = <1843200>;
 			interrupts = <PCIE_IRQ_DETECT IRQ_TYPE_LOWEST_LEVEL_LOW 3>;
 			interrupt-parent = <&intc>;
-			status = "okay";
+			status = "disabled";
 			current-speed = <115200>;
 		};
 
@@ -71,7 +71,7 @@
 			interrupts = <PCIE_IRQ_DETECT IRQ_TYPE_LOWEST_LEVEL_LOW 3>;
 			interrupt-parent = <&intc>;
 
-			status = "okay";
+			status = "disabled";
 			current-speed = <115200>;
 		};
 
