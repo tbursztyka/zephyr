@@ -72,7 +72,16 @@ struct acpi_madt_entry {
 	uint8_t length;
 } __packed;
 
-#define ACPI_MADT_ENTRY_CPU 0
+enum acpi_madt_entry_type {
+	ACPI_MADT_ENTRY_CPU			= 0,
+	ACPI_MADT_ENTRY_IOAPIC			= 1,
+	ACPI_MADT_ENTRY_INT_SRC_OVRD		= 2,
+	ACPI_MADT_ENTRY_NMI_SRC			= 3,
+	ACPI_MADT_ENTRY_LOAPIC_NMI		= 4,
+	ACPI_MADT_ENTRY_LOAPIC_ADDR_OVRD	= 5,
+	ACPI_MADT_ENTRY_X2APIC			= 9,
+	ACPI_MADT_ENTRY_X2APIC_NMI		= 0xA,
+};
 
 struct acpi_madt {
 	struct acpi_sdt sdt;
@@ -91,6 +100,67 @@ struct acpi_cpu {
 } __packed;
 
 #define ACPI_CPU_FLAGS_ENABLED 0x01
+
+struct acpi_ioapic {
+	struct acpi_madt_entry entry;
+	uint8_t id;
+	uint8_t reserved;
+	uint32_t addr;
+	uint32_t gsi_number; /* Global System Interrupt Number */
+} __packed;
+
+struct acpi_int_src_ovrd {
+	struct acpi_madt_entry entry;
+	uint8_t bus;
+	uint8_t irq;
+	uint32_t gsi; /* Global System Interrupt signaled */
+	uint16_t flags; /* see ACPI_MPS_INTI_* below */
+} __packed;
+
+#define ACPI_MPS_INTI_POLARITY_MASK 0x0003
+#define ACPI_MPS_INTI_POLARITY_BUS 0
+#define ACPI_MPS_INTI_POLARITY_ACTIVE_HIGH 1
+#define ACPI_MPS_INTI_POLARITY_ACTIVE_LOW 3
+
+#define ACPI_MPS_INTI_TRIGGER_MASK 0x000C
+#define ACPI_MPS_INTI_TRIGGER_BUS 0
+#define ACPI_MPS_INTI_TRIGGER_EDGE 1
+#define ACPI_MPS_INTI_TRIGGER_LEVEL 3
+
+struct acpi_nmi_src {
+	struct acpi_madt_entry entry;
+	uint16_t flags; /* see ACPI_MPS_INTI_* above */
+	uint32_t gsi; /* Global System Interrupt signaled */
+} __packed;
+
+struct acpi_loapic_nmi {
+	struct acpi_madt_entry entry;
+	uint8_t acpi_id;
+	uint16_t flags; /* see ACPI_MPS_INTI_* above */
+	uint8_t loapic_lint;
+} __packed;
+
+struct acpi_loapic_addr_ovrd {
+	struct acpi_madt_entry entry;
+	uint16_t reserved;
+	uint64_t addr;
+} __packed;
+
+struct acpi_x2apic {
+	struct acpi_madt_entry entry;
+	uint16_t reserved;
+	uint32_t id;
+	uint32_t flags; /* see ACPI_CPU_FLAGS_* above */
+	uint64_t acpi_uid;
+} __packed;
+
+struct acpi_x2apic_nmi {
+	struct acpi_madt_entry entry;
+	uint16_t flags; /* see ACPI_MPS_INTI_* above */
+	uint64_t acpi_uid;
+	uint8_t loapic_lint;
+	uint8_t reserved[3];
+} __packed;
 
 /* Generic DMA Remapping entry structure part */
 struct acpi_dmar_entry {
