@@ -127,6 +127,166 @@ static void vtd_info(void)
 	}
 }
 
+static void ioapic_info(struct acpi_madt *madt)
+{
+	uintptr_t base = POINTER_TO_UINT(madt);
+	uintptr_t offset;
+
+	offset = POINTER_TO_UINT(madt->entries) - base;
+	while (offset < madt->sdt.length) {
+		struct acpi_madt_entry *entry;
+
+		entry = (struct acpi_madt_entry *)(offset + base);
+		if (entry->type == ACPI_MADT_ENTRY_IOAPIC) {
+			struct acpi_ioapic *ioapic =
+				(struct acpi_ioapic *)entry;
+
+			printk("I/O APIC ID %u found at 0x%X handling "
+			       "interrupt starting at %u\n",
+			       ioapic->id, ioapic->addr, ioapic->gsi_number);
+		}
+
+		offset += entry->length;
+	}
+}
+
+static void loapic_info(struct acpi_madt *madt)
+{
+	uintptr_t base = POINTER_TO_UINT(madt);
+	uintptr_t offset;
+
+	printk("Local APIC address 0x%x\n", madt->loapic);
+
+	offset = POINTER_TO_UINT(madt->entries) - base;
+	while (offset < madt->sdt.length) {
+		struct acpi_madt_entry *entry;
+
+		entry = (struct acpi_madt_entry *)(offset + base);
+		if (entry->type == ACPI_MADT_ENTRY_LOAPIC_ADDR_OVRD) {
+			struct acpi_loapic_addr_ovrd *loapic_addr =
+				(struct acpi_loapic_addr_ovrd *)entry;
+
+			printk("Local APIC address override 0x%llx\n",
+			       loapic_addr->addr);
+			break;
+		}
+
+		offset += entry->length;
+	}
+
+	offset = POINTER_TO_UINT(madt->entries) - base;
+	while (offset < madt->sdt.length) {
+		struct acpi_madt_entry *entry;
+
+		entry = (struct acpi_madt_entry *)(offset + base);
+		if (entry->type == ACPI_MADT_ENTRY_X2APIC) {
+			struct acpi_loapic_nmi *nmi =
+				(struct acpi_loapic_nmi *)entry;
+
+			printk("Local API NMI: applying on processor "
+			       "ACPI ID 0x%x, LINT %u\n",
+			       nmi->acpi_id, nmi->loapic_lint);
+		}
+
+		offset += entry->length;
+	}
+}
+
+static void x2apic_info(struct acpi_madt *madt)
+{
+	uintptr_t base = POINTER_TO_UINT(madt);
+	uintptr_t offset;
+
+	offset = POINTER_TO_UINT(madt->entries) - base;
+	while (offset < madt->sdt.length) {
+		struct acpi_madt_entry *entry;
+
+		entry = (struct acpi_madt_entry *)(offset + base);
+		if (entry->type == ACPI_MADT_ENTRY_X2APIC) {
+			struct acpi_x2apic *x2apic =
+				(struct acpi_x2apic *)entry;
+
+			printk("X2APIC ID %u (ACPI UID %llu)\n",
+			       x2apic->id, x2apic->acpi_uid);
+		}
+
+		offset += entry->length;
+	}
+
+	offset = POINTER_TO_UINT(madt->entries) - base;
+	while (offset < madt->sdt.length) {
+		struct acpi_madt_entry *entry;
+
+		entry = (struct acpi_madt_entry *)(offset + base);
+		if (entry->type == ACPI_MADT_ENTRY_X2APIC) {
+			struct acpi_x2apic_nmi *nmi =
+				(struct acpi_x2apic_nmi *)entry;
+
+			printk("X2APIC API NMI: applying on processor "
+			       "ACPI UID 0x%llx, LINT %u\n",
+			       nmi->acpi_uid, nmi->loapic_lint);
+
+		}
+
+		offset += entry->length;
+	}
+}
+
+static void irq_src_override_info(struct acpi_madt *madt)
+{
+	uintptr_t base = POINTER_TO_UINT(madt);
+	uintptr_t offset;
+	int n = 0;
+
+	offset = POINTER_TO_UINT(madt->entries) - base;
+	while (offset < madt->sdt.length) {
+		struct acpi_madt_entry *entry;
+
+		entry = (struct acpi_madt_entry *)(offset + base);
+		if (entry->type == ACPI_MADT_ENTRY_INT_SRC_OVRD) {
+			struct acpi_int_src_ovrd *irq_ovrd =
+				(struct acpi_int_src_ovrd *)entry;
+
+			if (n == 0) {
+				printk("Interrupt Source override table:\n");
+				printk("Bus\tIRQ Pin\t\tIOAPIC Pin\n"
+				       "----------------------------------\n");
+			}
+
+			printk("%u\t%u\t\t%u\n",
+			       irq_ovrd->bus, irq_ovrd->irq, irq_ovrd->gsi);
+
+			n++;
+		}
+
+		offset += entry->length;
+	}
+}
+
+static void irq_info(void)
+{
+	struct acpi_madt *madt = z_acpi_find_table(ACPI_MADT_SIGNATURE);
+
+	if (!madt) {
+		printk("No interrupt information\n");
+		return;
+	}
+
+	ioapic_info(madt);
+
+	printk("\n");
+
+	loapic_info(madt);
+
+	printk("\n");
+
+	x2apic_info(madt);
+
+	printk("\n");
+
+	irq_src_override_info(madt);
+}
+
 void acpi(void)
 {
 	int nr_cpus;
@@ -145,6 +305,10 @@ void acpi(void)
 			printk("\tCPU #%d: APIC ID 0x%02x\n", i, cpu->apic_id);
 		}
 	}
+
+	printk("\n");
+
+	irq_info();
 
 	printk("\n");
 
